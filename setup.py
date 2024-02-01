@@ -21,6 +21,7 @@ def get_version():
 
 def get_install_requirements():
     requirements = [
+        "aiohttp", "requests", "tqdm", "fire"
     ]
     return requirements
 
@@ -67,5 +68,10 @@ setup(
         'test': requires_test,
         'doc': requires_doc,
         'dev': requires_dev,
-    }
+    },
+    entry_points={
+        'console_scripts': [
+            'triton_launcher=triton_launcher.__main__:main',
+        ],
+    },
 )

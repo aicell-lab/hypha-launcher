@@ -26,3 +26,6 @@ class App():
         await download_files(
             urls, dest_dir, n_parallel=n_parallel,
             base_url=s3_base_url)
+
+    async def pull_image(self, image_name: str):
+        pass

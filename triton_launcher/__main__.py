@@ -1,6 +1,10 @@
 from .app import App
 
 
-if __name__ == "__main__":
+def main():
     import fire
     fire.Fire(App)
+
+
+if __name__ == "__main__":
+    main()

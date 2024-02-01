@@ -4,17 +4,17 @@
 <p> Run triton server on HPC </p>
 
 <p>
-  <a href="https://github.com/aicell-lab/triton_launcher/actions/workflows/build_and_test.yml">
-      <img src="https://github.com/aicell-lab/triton_launcher/actions/workflows/build_and_test.yml/badge.svg" alt="Build Status">
+  <a href="https://github.com/aicell-lab/triton-launcher/actions/workflows/build_and_test.yml">
+      <img src="https://github.com/aicell-lab/triton-launcher/actions/workflows/build_and_test.yml/badge.svg" alt="Build Status">
   </a>
-  <a href="https://triton_launcher.readthedocs.io/en/latest/">
-  	<img src="https://readthedocs.org/projects/triton_launcher/badge/?version=latest" alt="Documentation">
+  <a href="https://triton-launcher.readthedocs.io/en/latest/">
+  	<img src="https://readthedocs.org/projects/triton-launcher/badge/?version=latest" alt="Documentation">
   </a>
   <a href="https://pypi.org/project/triton_launcher/">
     <img src="https://img.shields.io/pypi/v/triton_launcher.svg" alt="Install with PyPi" />
   </a>
-  <a href="https://github.com/aicell-lab/triton_launcher/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/aicell-lab/triton_launcher" alt="MIT license" />
+  <a href="https://github.com/aicell-lab/triton-launcher/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/aicell-lab/triton-launcher" alt="MIT license" />
   </a>
 </p>
 </div>
