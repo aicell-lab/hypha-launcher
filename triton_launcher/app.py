@@ -1,10 +1,17 @@
 import typing as T
 from pathlib import Path
+
+from executor.engine import Engine
+from executor.engine.job.extend.webapp import WebappJob
+
 from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
+from .utils.container import ContainerEngine
+from .utils.misc import get_ip_address
 
 
 S3_BASE_URL = "https://uk1s3.embassy.ebi.ac.uk/model-repository/"
+TRITON_IMAGE = "docker://nvcr.io/nvidia/tritonserver:23.03-py3"
 logger = get_logger()
 
 
@@ -41,5 +48,16 @@ class App():
             urls, dest_dir, n_parallel=n_parallel,
             base_url=s3_base_url)
 
-    async def pull_image(self, image_name: str):
+    def pull_image(self, image_name: str = TRITON_IMAGE):
+        contanier_engine = ContainerEngine(self.store_dir / "containers")
+        contanier_engine.pull_image(image_name)
+
+    def run_launcher_server(self, upstream_hypha_server: str):
+        """Start a launcher server, run in the login node of HPC. """
         pass
+        #login_node_ip = get_ip_address()
+        #engine = Engine()
+        #hypha_server_cmd = "python -m hypha.server"
+        #engine.submit(
+        #    WebappJob("python -m hypha.server")
+        #)

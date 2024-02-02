@@ -1,14 +1,10 @@
 import typing as T
 from pathlib import Path
-import subprocess as subp
+
 from .log import get_logger
+from .misc import run_cmd
 
 logger = get_logger()
-
-
-def run_cmd(cmd: T.List[str], check: bool = True):
-    logger.info(f"Running command: {' '.join(cmd)}")
-    subp.run(cmd, check=check)
 
 
 class ContainerEngine():
@@ -48,6 +44,8 @@ class ContainerEngine():
     def pull_image(self, image_name: str):
         logger.info(f"Pulling image {image_name}")
         if self.engine_type == "docker":
+            if image_name.startswith("docker://"):
+                image_name = image_name[len("docker://"):]
             run_cmd(["docker", "pull", image_name], check=True)
         elif self.engine_type == "apptainer":
             sif_prefix = image_name.split("//")[1] \

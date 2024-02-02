@@ -21,7 +21,9 @@ def get_version():
 
 def get_install_requirements():
     requirements = [
-        "aiohttp", "requests", "tqdm", "fire", "loguru",
+        "aiohttp", "requests", "tqdm", "fire",
+        "loguru", "executor-engine", "hypha",
+        "uvicorn"
     ]
     return requirements
 
