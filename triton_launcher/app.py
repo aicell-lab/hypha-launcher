@@ -4,6 +4,8 @@ from pathlib import Path
 
 from executor.engine import Engine
 from executor.engine.job.extend.webapp import WebappJob
+from executor.engine.job.extend.subprocess import SubprocessJob
+from executor.engine.job import ProcessJob
 from imjoy_rpc.hypha import connect_to_server
 
 from .utils.download import download_files, parse_s3_xml, download_content
@@ -58,27 +60,68 @@ class App():
             self, upstream_hypha_server: str = "https://ai.imjoy.io"):
         """Start a launcher server, run in the login node of HPC. """
         login_node_ip = get_ip_address()
+        login_hypha_port = None
         engine = Engine()
+        worker_count = 0
+        workers_jobs: T.Dict[str, SubprocessJob] = {}
+
+        def get_login_hypha_url():
+            return f"http://{login_node_ip}:{login_hypha_port}"
 
         async def run_hypha_server():
             """Run a hypha server in the login node."""
             hypha_server_cmd = "python -m hypha.server --host={ip} --port={port}" # noqa
             hypha_server_job = WebappJob(hypha_server_cmd, ip="0.0.0.0")
             await engine.submit_async(hypha_server_job)
+            while True:
+                if hypha_server_job.port:
+                    break
+                await asyncio.sleep(0.5)
             logger.info(
                 "Hypha server started at: "
                 f"{login_node_ip}:{hypha_server_job.port}")
+            nonlocal login_hypha_port
+            login_hypha_port = hypha_server_job.port
 
         async def link_to_upstream():
             """Link to the upstream hypha server."""
             server = await connect_to_server({"server_url": upstream_hypha_server}) # noqa
+            logger.info(f"Linking to upstream hypha server: {upstream_hypha_server}") # noqa
+
+            async def hello(worker_id: str):
+                server = await connect_to_server({"server_url": get_login_hypha_url()}) # noqa
+                worker = await server.get_service(worker_id)
+                return await worker.hello()
+
+            async def start_worker():
+                nonlocal worker_count
+                worker_count += 1
+                worker_id = f"worker_{worker_count}"
+                cmd_job = SubprocessJob(
+                    f"python -m triton_launcher run_worker {worker_id} {get_login_hypha_url()}",  # noqa
+                    base_class=ProcessJob
+                )
+                await engine.submit_async(cmd_job)
+                workers_jobs[worker_id] = cmd_job
+                return worker_id
+
+            async def stop_worker(worker_id: str):
+                if worker_id in workers_jobs:
+                    job = workers_jobs[worker_id]
+                    await job.cancel()
+                    del workers_jobs[worker_id]
+                    return True
+                return False
+
             await server.register_service({
                 "name": "triton_launcher",
-                "id": "launcher",
+                "id": "triton_launcher",
                 "config": {
                     "visibility": "public"
                 },
-                "run_worker": self.run_worker,
+                "hello": hello,
+                "start_worker": start_worker,
+                "stop_worker": stop_worker,
             })
 
         loop = asyncio.get_event_loop()
@@ -87,16 +130,19 @@ class App():
         loop.run_forever()
 
     def run_worker(
-            self, hypha_server_url: str):
+            self,
+            worker_id: str,
+            hypha_server_url: str):
         async def start_worker_server(server_url: str):
             server = await connect_to_server({"server_url": server_url})
 
             def hello():
                 print("Hello from worker")
+                return "Hello from worker"
 
             await server.register_service({
-                "name": "hello",
-                "id": "hello",
+                "name": "worker",
+                "id": worker_id,
                 "config": {
                     "visibility": "public"
                 },
