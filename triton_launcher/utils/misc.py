@@ -1,5 +1,6 @@
 import typing as T
 import subprocess as subp
+import socket
 from .log import get_logger
 
 
@@ -12,6 +13,10 @@ def run_cmd(cmd: T.List[str], check: bool = True):
 
 
 def get_ip_address():
-    cmd = ["hostname", "-I"]
-    result = subp.run(cmd, check=True, stdout=subp.PIPE)
-    return result.stdout.decode("utf-8").strip().split()[0]
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        IP = s.getsockname()[0]
+    finally:
+        s.close()
+    return IP
