@@ -4,12 +4,6 @@
 <p> Run triton server on HPC </p>
 
 <p>
-  <a href="https://github.com/aicell-lab/triton-launcher/actions/workflows/build_and_test.yml">
-      <img src="https://github.com/aicell-lab/triton-launcher/actions/workflows/build_and_test.yml/badge.svg" alt="Build Status">
-  </a>
-  <a href="https://triton-launcher.readthedocs.io/en/latest/">
-  	<img src="https://readthedocs.org/projects/triton-launcher/badge/?version=latest" alt="Documentation">
-  </a>
   <a href="https://pypi.org/project/triton_launcher/">
     <img src="https://img.shields.io/pypi/v/triton_launcher.svg" alt="Install with PyPi" />
   </a>
@@ -21,16 +15,27 @@
 
 **Work In Progress**
 
+## Features
+
++ CLI for downloading model from s3 and pulling docker image of triton server
++ Support different container engines
+  - Docker
+  - Apptainer
++ Support different compute environments
+  - Local
+  - Slurm
 
 ## TODO
 
 * [x] Download model from s3
-* [ ] Pull docker image of triton server
-* [ ] Run triton server on HPC
-* [ ] Register service on hypha
-* [ ] Conmmunicate with triton server
+* [x] Pull docker image of triton server
+* [x] Run triton server
+* [x] Register service on hypha
+* [x] Conmmunicate with triton server
+* [ ] Test on HPC
+* [ ] Documentation
 
-## Credits
+## Other information
 
 This package was created with Cookiecutter and the `Nanguage/cookiecutter-pypackage` project template.
 

@@ -41,11 +41,16 @@ class ContainerEngine():
                 "Cannot find supported container engine: "
                 f"{self.supported_engines}")
 
+    @staticmethod
+    def process_image_name_for_docker(image_name: str):
+        if image_name.startswith("docker://"):
+            return image_name[len("docker://"):]
+        return image_name
+
     def pull_image(self, image_name: str):
         logger.info(f"Pulling image {image_name}")
         if self.engine_type == "docker":
-            if image_name.startswith("docker://"):
-                image_name = image_name[len("docker://"):]
+            image_name = self.process_image_name_for_docker(image_name)
             run_cmd(["docker", "pull", image_name], check=True)
         elif self.engine_type == "apptainer":
             sif_prefix = image_name.split("//")[1] \
@@ -58,6 +63,49 @@ class ContainerEngine():
             else:
                 logger.info(f"Image exists: {sif_path}")
             self.sif_files[image_name] = sif_path
+        else:
+            raise NotImplementedError
+
+    def run_command(
+            self, cmd: str, image_name: str,
+            volumes: dict = None, ports: dict = None):
+        """Start container with a command,
+        supporting volume and port mapping.
+
+        Args:
+            cmd (str): command to run in the container
+            image_name (str): image name
+            volumes (dict, optional): volume mapping
+                The key is the host path and the value is the container path
+            ports (dict, optional): port mapping
+                The key is the host port and the value is the container port
+        """
+        # Initialize volume and port mappings as empty strings
+        volume_mapping = ""
+        port_mapping = ""
+        # If volumes are provided, construct volume mapping options
+        if volumes:
+            for host_path, container_path in volumes.items():
+                volume_mapping += f"-v {host_path}:{container_path} "
+        # If ports are provided, construct port mapping options
+        if ports:
+            for host_port, container_port in ports.items():
+                port_mapping += f"-p {host_port}:{container_port} "
+        # Construct the command based on the engine type
+        if self.engine_type == "docker":
+            image_name = self.process_image_name_for_docker(image_name)
+            run_cmd(f"docker run {volume_mapping} {port_mapping} {image_name} {cmd}", check=True)  # noqa
+        elif self.engine_type == "apptainer":
+            # Note: Apptainer (formerly Singularity) has different options
+            sif_path = self.sif_files[image_name]
+            # For Apptainer, bind options are used for volume mapping
+            bind_option = ""
+            if volumes:
+                binds = [
+                    f"{host}:{container}"
+                    for host, container in volumes.items()]
+                bind_option = f"--bind {','.join(binds)} "
+            run_cmd(f"apptainer run {bind_option} {sif_path} {cmd}", check=True)  # noqa
         else:
             raise NotImplementedError
 
