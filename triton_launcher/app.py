@@ -55,6 +55,7 @@ class App():
                 logger.error("Slurm settings is not provided.")
                 raise ValueError("Slurm settings is not provided.")
             assert "account" in self.slurm_settings, "account is required in slurm settings"  # noqa
+        self.container_engine = ContainerEngine(self.store_dir / "containers")
 
     async def download_models_from_s3(
             self, pattern: str,
@@ -83,8 +84,7 @@ class App():
             base_url=s3_base_url)
 
     def pull_image(self, image_name: str = TRITON_IMAGE):
-        contanier_engine = ContainerEngine(self.store_dir / "containers")
-        contanier_engine.pull_image(image_name)
+        self.container_engine.pull_image(image_name)
 
     def run_launcher_server(self):
         """Start a launcher server, run in the login node of HPC. """
@@ -278,11 +278,11 @@ class App():
             })
 
         engine = Engine()
-        container_engine = ContainerEngine(self.store_dir / "containers")
+        self.container_engine.pull_image(TRITON_IMAGE)
 
         async def start_triton_server():
             def run_triton_server(host_port: int):
-                container_engine.run_command(
+                self.container_engine.run_command(
                     f"bash -c \"tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10\"",  # noqa
                     TRITON_IMAGE,
                     ports={

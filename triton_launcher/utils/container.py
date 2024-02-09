@@ -59,7 +59,9 @@ class ContainerEngine():
             if not Path(sif_path).exists():
                 logger.info(f"Pull and saving image to {sif_path}")
                 run_cmd(
-                    ["apptainer", "pull", image_name, sif_path], check=True)
+                    ["apptainer", "pull", str(sif_path), image_name],
+                    check=True
+                )
             else:
                 logger.info(f"Image exists: {sif_path}")
             self.sif_files[image_name] = sif_path
