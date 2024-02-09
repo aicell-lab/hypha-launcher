@@ -48,8 +48,7 @@ class App():
         logger.info(f"Computational environment: {hpc_type}")
         self.hpc_type = hpc_type
         self.slurm_settings = slurm_settings
-        if self.slurm_settings == "slurm":
-            assert self.hpc_type == "slurm"
+        if self.hpc_type == "slurm":
             logger.info(f"Slurm settings: {self.slurm_settings}")
             if self.slurm_settings is None:
                 logger.error("Slurm settings is not provided.")
