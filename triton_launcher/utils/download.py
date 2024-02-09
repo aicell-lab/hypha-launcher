@@ -36,7 +36,8 @@ async def download_file(url, dest_dir):
         os.makedirs(dest_dir)
     local_filename = os.path.join(dest_dir, url.split('/')[-1])
 
-    async with aiohttp.ClientSession() as session:
+    tout = aiohttp.ClientTimeout(10**10)
+    async with aiohttp.ClientSession(timeout=tout) as session:
         async with session.get(url) as resp:
             total_size = int(resp.headers.get('content-length', 0))
             chunk_size = 1024

@@ -5,6 +5,7 @@ from pathlib import Path
 from executor.engine import Engine
 from executor.engine.job.extend.webapp import WebappJob
 from executor.engine.job.extend.subprocess import SubprocessJob
+from executor.engine.job.base import Job
 from executor.engine.job import ProcessJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
@@ -14,6 +15,7 @@ from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
 from .utils.container import ContainerEngine
 from .utils.misc import get_ip_address
+from .utils.hpc import SlurmSubprocess, detect_hpc_type
 
 
 S3_BASE_URL = "https://uk1s3.embassy.ebi.ac.uk/model-repository/"
@@ -27,6 +29,8 @@ class App():
             store_dir: str = "~/.triton_launcher",
             upstream_hypha_url: str = "https://ai.imjoy.io",
             service_id: str = "triton_launcher",
+            hpc_type: T.Optional[str] = None,
+            slurm_settings: T.Optional[T.Dict[str, str]] = None,
             debug: bool = False):
         self.store_dir = Path(store_dir).expanduser().absolute()
         self.upstream_hypha_url = upstream_hypha_url
@@ -37,6 +41,20 @@ class App():
         logger.info(f"Upstream hypha server: {self.upstream_hypha_url}")
         logger.info(f"Service id: {self.service_id}")
         self.debug = debug
+        if hpc_type is not None:
+            assert hpc_type in ["slurm", "local"], f"Invalid hpc_type: {hpc_type}"  # noqa
+        else:
+            hpc_type = detect_hpc_type()
+        logger.info(f"Computational environment: {hpc_type}")
+        self.hpc_type = hpc_type
+        self.slurm_settings = slurm_settings
+        if self.slurm_settings == "slurm":
+            assert self.hpc_type == "slurm"
+            logger.info(f"Slurm settings: {self.slurm_settings}")
+            if self.slurm_settings is None:
+                logger.error("Slurm settings is not provided.")
+                raise ValueError("Slurm settings is not provided.")
+            assert "account" in self.slurm_settings, "account is required in slurm settings"  # noqa
 
     async def download_models_from_s3(
             self, pattern: str,
@@ -74,7 +92,7 @@ class App():
         login_hypha_port = None
         engine = Engine()
         worker_count = 0  # only increase
-        workers_jobs: T.Dict[str, SubprocessJob] = {}
+        workers_jobs: T.Dict[str, Job] = {}
         current_worker_id: T.Union[int, None] = None
 
         def get_login_hypha_url():
@@ -114,10 +132,17 @@ class App():
                 cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id} {get_login_hypha_url()}"  # noqa
                 logger.info(f"Starting worker: {worker_id}")
                 logger.info(f"Command: {cmd}")
-                cmd_job = SubprocessJob(
-                    cmd,
-                    base_class=ProcessJob
-                )
+                if self.hpc_type == "slurm":
+                    assert self.slurm_settings is not None
+                    cmd_job = SlurmSubprocess(
+                        cmd,
+                        **self.slurm_settings
+                    )
+                else:
+                    cmd_job = SubprocessJob(
+                        cmd,
+                        base_class=ProcessJob
+                    )
                 nonlocal current_worker_id
                 current_worker_id = worker_id
                 await engine.submit_async(cmd_job)
@@ -202,7 +227,7 @@ class App():
                 print("Hello from worker")
                 return "Hello from worker"
 
-            async def get_triton_config(model_name: str, verbose: bool = False):
+            async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
                 if host_triton_port is not None:
                     try:
                         res = await get_config(

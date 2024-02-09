@@ -27,7 +27,7 @@ def SlurmSubprocess(
     return p
 
 
-def detect_hpc_type() -> T.Optional[str]:
+def detect_hpc_type() -> str:
     try:
         run_cmd(["sinfo"], check=True)
         return "slurm"
@@ -38,4 +38,4 @@ def detect_hpc_type() -> T.Optional[str]:
         return "pbs"
     except FileNotFoundError:
         pass
-    return None
+    return "local"
