@@ -167,7 +167,9 @@ class App():
                 server = await connect_to_server({"server_url": get_login_hypha_url()})  # noqa
                 if current_worker_id is None:
                     logger.error("No worker is running.")
-                    return None
+                    return {
+                        "error": "No worker is running."
+                    }
                 worker = await server.get_service(current_worker_id)
                 res = await worker.get_config(model_name, verbose=verbose)
                 return res
@@ -181,7 +183,9 @@ class App():
                 server = await connect_to_server({"server_url": get_login_hypha_url()})  # noqa
                 if current_worker_id is None:
                     logger.error("No worker is running.")
-                    return None
+                    return {
+                        "error": "No worker is running."
+                    }
                 worker = await server.get_service(current_worker_id)
                 res = await worker.execute(
                     inputs=inputs,
@@ -236,10 +240,14 @@ class App():
                         return res
                     except Exception as e:
                         logger.error(f"Error: {e}")
-                        return None
+                        return {
+                            "error": str(e)
+                        }
                 else:
                     logger.error("Triton server is not started yet.")
-                    return None
+                    return {
+                        "error": "Triton server is not started yet."
+                    }
 
             async def execute_triton(
                     inputs: T.Union[T.Any, None] = None,
@@ -259,10 +267,14 @@ class App():
                         return res
                     except Exception as e:
                         logger.error(f"Error: {e}")
-                        return None
+                        return {
+                            "error": str(e)
+                        }
                 else:
                     logger.error("Triton server is not started yet.")
-                    return None
+                    return {
+                        "error": "Triton server is not started yet."
+                    }
 
             await server.register_service({
                 "name": "worker",
@@ -281,10 +293,10 @@ class App():
         async def start_triton_server():
             def run_triton_server(host_port: int):
                 self.container_engine.run_command(
-                    f"bash -c \"tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10\"",  # noqa
+                    f"bash -c \"tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}\"",  # noqa
                     TRITON_IMAGE,
                     ports={
-                        host_port: 8000
+                        host_port: host_port
                     },
                     volumes={
                         str(self.store_dir / "models"): "/models"

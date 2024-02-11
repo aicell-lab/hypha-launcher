@@ -107,7 +107,7 @@ class ContainerEngine():
                     f"{host}:{container}"
                     for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
-            run_cmd(f"apptainer run {bind_option} {sif_path} {cmd}", check=True)  # noqa
+            run_cmd(f"apptainer run --contain {bind_option} {sif_path} {cmd}", check=True)  # noqa
         else:
             raise NotImplementedError
 
