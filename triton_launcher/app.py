@@ -27,33 +27,12 @@ class App():
     def __init__(
             self,
             store_dir: str = "~/.triton_launcher",
-            upstream_hypha_url: str = "https://ai.imjoy.io",
-            service_id: str = "triton_launcher",
-            hpc_type: T.Optional[str] = None,
-            slurm_settings: T.Optional[T.Dict[str, str]] = None,
             debug: bool = False):
         self.store_dir = Path(store_dir).expanduser().absolute()
-        self.upstream_hypha_url = upstream_hypha_url
-        self.service_id = service_id
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
         logger.info(f"Store dir: {self.store_dir}")
-        logger.info(f"Upstream hypha server: {self.upstream_hypha_url}")
-        logger.info(f"Service id: {self.service_id}")
         self.debug = debug
-        if hpc_type is not None:
-            assert hpc_type in ["slurm", "local"], f"Invalid hpc_type: {hpc_type}"  # noqa
-        else:
-            hpc_type = detect_hpc_type()
-        logger.info(f"Computational environment: {hpc_type}")
-        self.hpc_type = hpc_type
-        self.slurm_settings = slurm_settings
-        if self.hpc_type == "slurm":
-            logger.info(f"Slurm settings: {self.slurm_settings}")
-            if self.slurm_settings is None:
-                logger.error("Slurm settings is not provided.")
-                raise ValueError("Slurm settings is not provided.")
-            assert "account" in self.slurm_settings, "account is required in slurm settings"  # noqa
         self.container_engine = ContainerEngine(self.store_dir / "containers")
 
     async def download_models_from_s3(
@@ -85,8 +64,17 @@ class App():
     def pull_image(self, image_name: str = TRITON_IMAGE):
         self.container_engine.pull_image(image_name)
 
-    def run_launcher_server(self):
+    def run_launcher_server(
+            self,
+            upstream_hypha_url: str = "https://ai.imjoy.io",
+            service_id: str = "triton_launcher",
+            hpc_type: T.Optional[str] = None,
+            slurm_settings: T.Optional[T.Dict[str, str]] = None,
+            ):
         """Start a launcher server, run in the login node of HPC. """
+        logger.info(f"Upstream hypha server: {upstream_hypha_url}")
+        logger.info(f"Service id: {service_id}")
+
         login_node_ip = get_ip_address()
         login_hypha_port = None
         engine = Engine()
@@ -94,6 +82,17 @@ class App():
         workers_jobs: T.Dict[str, Job] = {}
         current_worker_id: T.Union[int, None] = None
 
+        if hpc_type is not None:
+            assert hpc_type in ["slurm", "local"], f"Invalid hpc_type: {hpc_type}"  # noqa
+        else:
+            hpc_type = detect_hpc_type()
+        logger.info(f"Computational environment: {hpc_type}")
+        if hpc_type == "slurm":
+            logger.info(f"Slurm settings: {slurm_settings}")
+            if slurm_settings is None:
+                logger.error("Slurm settings is not provided.")
+                raise ValueError("Slurm settings is not provided.")
+            assert "account" in slurm_settings, "account is required in slurm settings"  # noqa
         def get_login_hypha_url():
             return f"http://{login_node_ip}:{login_hypha_port}"
 
@@ -116,8 +115,8 @@ class App():
             """Start hypha server and link with the upstream hypha server."""
             await run_hypha_server()
 
-            server = await connect_to_server({"server_url": self.upstream_hypha_url}) # noqa
-            logger.info(f"Linking to upstream hypha server: {self.upstream_hypha_url}") # noqa
+            server = await connect_to_server({"server_url": upstream_hypha_url}) # noqa
+            logger.info(f"Linking to upstream hypha server: {upstream_hypha_url}") # noqa
 
             async def hello(worker_id: str):
                 server = await connect_to_server({"server_url": get_login_hypha_url()}) # noqa
@@ -131,11 +130,11 @@ class App():
                 cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id} {get_login_hypha_url()}"  # noqa
                 logger.info(f"Starting worker: {worker_id}")
                 logger.info(f"Command: {cmd}")
-                if self.hpc_type == "slurm":
-                    assert self.slurm_settings is not None
+                if hpc_type == "slurm":
+                    assert slurm_settings is not None
                     cmd_job = SlurmSubprocess(
                         cmd,
-                        **self.slurm_settings
+                        **slurm_settings
                     )
                 else:
                     cmd_job = SubprocessJob(
@@ -194,7 +193,7 @@ class App():
 
             service = {
                 "name": "triton_launcher",
-                "id": self.service_id,
+                "id": service_id,
                 "config": {
                     "visibility": "public"
                 },
