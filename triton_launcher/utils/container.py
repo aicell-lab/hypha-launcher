@@ -50,7 +50,7 @@ class ContainerEngine():
 
     @staticmethod
     def process_image_name_for_podman(image_name: str):
-        return f"docker.io{ContainerEngine.process_image_name_for_docker(image_name)}"
+        return f"{ContainerEngine.process_image_name_for_docker(image_name)}"
 
     def pull_image(self, image_name: str):
         logger.info(f"Pulling image {image_name}")
