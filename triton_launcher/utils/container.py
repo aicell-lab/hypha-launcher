@@ -12,13 +12,14 @@ class ContainerEngine():
     Provides a common interface to container engines,
     such as docker, apptainer, podman, etc.
     """
-    supported_engines = ["docker", "apptainer"]
+    supported_engines = ["docker", "apptainer", "podman"]
 
     def __init__(
             self,
-            store_dir: T.Optional[str] = "~/.triton_launcher/containers",
+            store_dir: str = "~/.triton_launcher/containers",
             engine_type: T.Optional[str] = None
             ):
+
         self.store_dir = Path(store_dir).expanduser()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
@@ -26,7 +27,7 @@ class ContainerEngine():
             self.engine_type = engine_type
         else:
             self.engine_type = self.detect_engine_type()
-        self.sif_files = {}
+        self.sif_files: T.Dict[str, Path] = {}
 
     def detect_engine_type(self):
         for engine in self.supported_engines:
@@ -47,6 +48,10 @@ class ContainerEngine():
             return image_name[len("docker://"):]
         return image_name
 
+    @staticmethod
+    def process_image_name_for_podman(image_name: str):
+        return f"docker.io{ContainerEngine.process_image_name_for_docker(image_name)}"
+
     def pull_image(self, image_name: str):
         logger.info(f"Pulling image {image_name}")
         if self.engine_type == "docker":
@@ -65,12 +70,18 @@ class ContainerEngine():
             else:
                 logger.info(f"Image exists: {sif_path}")
             self.sif_files[image_name] = sif_path
+        elif self.engine_type == "podman":
+            image_name = self.process_image_name_for_podman(image_name)
+            run_cmd(["podman", "pull", image_name], check=True)
         else:
             raise NotImplementedError
 
     def run_command(
-            self, cmd: str, image_name: str,
-            volumes: dict = None, ports: dict = None):
+            self,
+            cmd: str,
+            image_name: str,
+            volumes: T.Optional[dict] = None,
+            ports: T.Optional[dict] = None):
         """Start container with a command,
         supporting volume and port mapping.
 
@@ -108,6 +119,9 @@ class ContainerEngine():
                     for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
             run_cmd(f"apptainer run --contain {bind_option} {sif_path} {cmd}", check=True)  # noqa
+        elif self.engine_type == "podman":
+            image_name = self.process_image_name_for_docker(image_name)
+            run_cmd(f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}", check=True)  # noqa
         else:
             raise NotImplementedError
 
