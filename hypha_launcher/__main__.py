@@ -3,6 +3,7 @@ from .app import App
 
 def main():
     import fire
+
     fire.Fire(App)
 
 

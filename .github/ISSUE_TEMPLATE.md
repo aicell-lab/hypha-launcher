@@ -1,4 +1,4 @@
-* triton-launcher version:
+* hypha-launcher version:
 * Python version:
 * Operating System:
 

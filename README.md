@@ -1,14 +1,14 @@
 <div align="center">
-<h1> triton-launcher </h1>
+<h1> hypha-launcher </h1>
 
 <p> Run triton server on HPC </p>
 
 <p>
-  <a href="https://pypi.org/project/triton_launcher/">
-    <img src="https://img.shields.io/pypi/v/triton_launcher.svg" alt="Install with PyPi" />
+  <a href="https://pypi.org/project/hypha-launcher/">
+    <img src="https://img.shields.io/pypi/v/hypha-launcher.svg" alt="Install with PyPi" />
   </a>
-  <a href="https://github.com/aicell-lab/triton-launcher/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/aicell-lab/triton-launcher" alt="MIT license" />
+  <a href="https://github.com/aicell-lab/hypha-launcher/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/aicell-lab/hypha-launcher" alt="MIT license" />
   </a>
 </p>
 </div>
@@ -28,20 +28,18 @@
 ## Installation
 
 ```bash
-git clone https://github.com/aicell-lab/triton-launcher.git
-cd triton-launcher
-pip install .
+pip install hypha-launcher
 ```
 
 ## Usage
 
 ```bash
-$ triton_launcher
+$ hypha-launcher
 NAME
-    triton_launcher
+    hypha-launcher
 
 SYNOPSIS
-    triton_launcher - GROUP | COMMAND | VALUE
+    hypha-launcher - GROUP | COMMAND | VALUE
 
 GROUPS
     GROUP is one of the following:
@@ -74,13 +72,13 @@ VALUES
 ### Download model from s3
 
 ```bash
-$ triton_launcher --store-dir="./triton_store" - download_models_from_s3 bioengine-model-runner.* --n_parallel=5
+$ hypha-launcher --store-dir="./triton_store" - download_models_from_s3 bioengine-model-runner.* --n_parallel=5
 ```
 
 ### Pull docker image of triton server
 
 ```bash
-$ triton_launcher --store-dir="./triton_store" - pull_image
+$ hypha-launcher --store-dir="./triton_store" - pull_image
 ```
 
 ### Start launcher
@@ -88,13 +86,13 @@ $ triton_launcher --store-dir="./triton_store" - pull_image
 On local machine:
 
 ```bash
-$ triton_launcher --store-dir="./triton_store/" - run_launcher_server 
+$ hypha-launcher --store-dir="./triton_store/" - run_launcher_server 
 ```
 
 On HPC(Slurm):
 
 ```bash
-$ triton_launcher --store-dir="./triton_store/" - run_launcher_server --slurm-settings='{"account": "your-account", "gpus_per_node": "V100:1", "time": "01:00:00"}'
+$ hypha-launcher --store-dir="./triton_store/" - run_launcher_server --slurm-settings='{"account": "your-account", "gpus_per_node": "V100:1", "time": "01:00:00"}'
 ```
 
 ## TODO
@@ -109,9 +107,12 @@ $ triton_launcher --store-dir="./triton_store/" - run_launcher_server --slurm-se
 * [ ] Load balancing
 * [ ] Documentation
 
-## Other information
 
-This package was created with Cookiecutter and the `Nanguage/cookiecutter-pypackage` project template.
+## Development
+Install the package in editable mode with the following command:
 
-+ Cookiecutter: https://github.com/audreyr/cookiecutter
-+ `Nanguage/cookiecutter-pypackage`: https://github.com/Nanguage/cookiecutter-pypackage
+```bash
+pip install -e .
+pip install -r requirements-dev.txt
+```
+

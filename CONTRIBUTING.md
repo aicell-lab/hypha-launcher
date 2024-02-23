@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs at https://github.com/Nanguage/triton_launcher/issues.
+Report bugs at https://github.com/aicell-lab/hypha-launcher/issues.
 
 If you are reporting a bug, please include:
 
@@ -29,13 +29,13 @@ and "help wanted" is open to whoever wants to implement it.
 
 ### Write Documentation
 
-triton-launcher could always use more documentation, whether as part of the
-official triton-launcher docs, in docstrings, or even on the web in blog posts,
+hypha-launcher could always use more documentation, whether as part of the
+official hypha-launcher docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 
 ## Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/Nanguage/triton_launcher/issues.
+The best way to send feedback is to file an issue at https://github.com/aicell-lab/hypha-launcher/issues.
 
 If you are proposing a feature:
 
@@ -46,20 +46,20 @@ If you are proposing a feature:
 
 # Get Started!
 
-Ready to contribute? Here's how to set up `triton_launcher` for local development.
+Ready to contribute? Here's how to set up `hypha_launcher` for local development.
 
-1. Fork the `triton_launcher` repo on GitHub.
+1. Fork the `hypha_launcher` repo on GitHub.
 
 2. Clone your fork locally:
 ```bash
-$ git clone git@github.com:your_name_here/triton_launcher.git
+$ git clone git@github.com:your_name_here/hypha_launcher.git
 ```
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development:
 
 ```
-$ mkvirtualenv triton_launcher
-$ cd triton_launcher/
+$ mkvirtualenv hypha_launcher
+$ cd hypha_launcher/
 $ python -m pip install ".[dev]"
 ```
 
@@ -73,7 +73,7 @@ Now you can make your changes locally.
 5. When you're done making changes, check that your changes pass flake8 and the tests, including testing other Python versions with tox:
 
 ```
-$ flake8 triton_launcher
+$ flake8 hypha_launcher
 $ pytest -s tests/
 ```
 

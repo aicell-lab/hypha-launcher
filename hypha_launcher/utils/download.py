@@ -22,29 +22,33 @@ def find_relative_path(url, index_url):
     url_path = urlparse(url).path
     index_url_path = urlparse(index_url).path
     # Ensure the base path ends with a slash
-    if not index_url_path.endswith('/'):
-        index_url_path += '/'
+    if not index_url_path.endswith("/"):
+        index_url_path += "/"
     # Construct the full path for comparison and remove the base URL path
-    relative_full_path = url_path.replace(index_url_path, '', 1)
+    relative_full_path = url_path.replace(index_url_path, "", 1)
     # Remove the filename from the path to get the directory path
-    relative_dir_path = '/'.join(relative_full_path.split('/')[:-1])
+    relative_dir_path = "/".join(relative_full_path.split("/")[:-1])
     return relative_dir_path
 
 
 async def download_file(url, dest_dir):
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
-    local_filename = os.path.join(dest_dir, url.split('/')[-1])
+    local_filename = os.path.join(dest_dir, url.split("/")[-1])
 
     tout = aiohttp.ClientTimeout(10**10)
     async with aiohttp.ClientSession(timeout=tout) as session:
         async with session.get(url) as resp:
-            total_size = int(resp.headers.get('content-length', 0))
+            total_size = int(resp.headers.get("content-length", 0))
             chunk_size = 1024
             with tqdm_asyncio(
-                    total=total_size, unit='B', unit_scale=True,
-                    desc=local_filename, ascii=True) as progress_bar:
-                with open(local_filename, 'wb') as f:
+                total=total_size,
+                unit="B",
+                unit_scale=True,
+                desc=local_filename,
+                ascii=True,
+            ) as progress_bar:
+                with open(local_filename, "wb") as f:
                     async for chunk in resp.content.iter_chunked(chunk_size):
                         f.write(chunk)
                         progress_bar.update(len(chunk))
@@ -83,19 +87,19 @@ def parse_s3_xml(content: str, key_pattern: str) -> list[str]:
     root = ET.fromstring(content)
 
     # Define the namespace mapping
-    ns = {'ns': 'http://s3.amazonaws.com/doc/2006-03-01/'}
+    ns = {"ns": "http://s3.amazonaws.com/doc/2006-03-01/"}
 
     # Compile the regex pattern for matching keys
     pattern = re.compile(key_pattern)
 
     # Find all 'Contents' elements considering the namespace
-    contents_elements = root.findall('ns:Contents', ns)
+    contents_elements = root.findall("ns:Contents", ns)
 
     # Extract the 'Key' element text if it matches the pattern
     matching_keys = [
-        elem.find('ns:Key', ns).text
+        elem.find("ns:Key", ns).text
         for elem in contents_elements
-        if pattern.match(elem.find('ns:Key', ns).text)
+        if pattern.match(elem.find("ns:Key", ns).text)
     ]
 
     return matching_keys
@@ -103,4 +107,5 @@ def parse_s3_xml(content: str, key_pattern: str) -> list[str]:
 
 if __name__ == "__main__":
     import fire
+
     fire.Fire(download_files)

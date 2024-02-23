@@ -1,0 +1,10 @@
+aiohttp==3.9.3
+requests==2.31.0
+tqdm==4.66.2
+fire==0.4.0
+loguru==0.7.2
+executor-engine==0.2.3
+hypha==0.15.36
+uvicorn==0.15.0
+imjoy-rpc==0.5.47
+pyotritonclient==0.2.6

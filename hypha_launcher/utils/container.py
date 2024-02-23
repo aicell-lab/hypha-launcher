@@ -7,18 +7,19 @@ from .misc import run_cmd
 logger = get_logger()
 
 
-class ContainerEngine():
+class ContainerEngine:
     """Container engine abstraction.
     Provides a common interface to container engines,
     such as docker, apptainer, podman, etc.
     """
+
     supported_engines = ["docker", "apptainer", "podman"]
 
     def __init__(
-            self,
-            store_dir: str = "~/.triton_launcher/containers",
-            engine_type: T.Optional[str] = None
-            ):
+        self,
+        store_dir: str = "~/.hypha_launcher/containers",
+        engine_type: T.Optional[str] = None,
+    ):
 
         self.store_dir = Path(store_dir).expanduser()
         if not self.store_dir.exists():
@@ -39,13 +40,13 @@ class ContainerEngine():
                 pass
         else:
             raise RuntimeError(
-                "Cannot find supported container engine: "
-                f"{self.supported_engines}")
+                "Cannot find supported container engine: " f"{self.supported_engines}"
+            )
 
     @staticmethod
     def process_image_name_for_docker(image_name: str):
         if image_name.startswith("docker://"):
-            return image_name[len("docker://"):]
+            return image_name[len("docker://") :]
         return image_name
 
     @staticmethod
@@ -58,15 +59,11 @@ class ContainerEngine():
             image_name = self.process_image_name_for_docker(image_name)
             run_cmd(["docker", "pull", image_name], check=True)
         elif self.engine_type == "apptainer":
-            sif_prefix = image_name.split("//")[1] \
-                .replace("/", "-").replace(":", "_")
+            sif_prefix = image_name.split("//")[1].replace("/", "-").replace(":", "_")
             sif_path = self.store_dir / f"{sif_prefix}.sif"
             if not Path(sif_path).exists():
                 logger.info(f"Pull and saving image to {sif_path}")
-                run_cmd(
-                    ["apptainer", "pull", str(sif_path), image_name],
-                    check=True
-                )
+                run_cmd(["apptainer", "pull", str(sif_path), image_name], check=True)
             else:
                 logger.info(f"Image exists: {sif_path}")
             self.sif_files[image_name] = sif_path
@@ -77,11 +74,12 @@ class ContainerEngine():
             raise NotImplementedError
 
     def run_command(
-            self,
-            cmd: str,
-            image_name: str,
-            volumes: T.Optional[dict] = None,
-            ports: T.Optional[dict] = None):
+        self,
+        cmd: str,
+        image_name: str,
+        volumes: T.Optional[dict] = None,
+        ports: T.Optional[dict] = None,
+    ):
         """Start container with a command,
         supporting volume and port mapping.
 
@@ -107,25 +105,32 @@ class ContainerEngine():
         # Construct the command based on the engine type
         if self.engine_type == "docker":
             image_name = self.process_image_name_for_docker(image_name)
-            run_cmd(f"docker run {volume_mapping} {port_mapping} {image_name} {cmd}", check=True)  # noqa
+            run_cmd(
+                f"docker run {volume_mapping} {port_mapping} {image_name} {cmd}",
+                check=True,
+            )  # noqa
         elif self.engine_type == "apptainer":
             # Note: Apptainer (formerly Singularity) has different options
             sif_path = self.sif_files[image_name]
             # For Apptainer, bind options are used for volume mapping
             bind_option = ""
             if volumes:
-                binds = [
-                    f"{host}:{container}"
-                    for host, container in volumes.items()]
+                binds = [f"{host}:{container}" for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
-            run_cmd(f"apptainer run --contain {bind_option} {sif_path} {cmd}", check=True)  # noqa
+            run_cmd(
+                f"apptainer run --contain {bind_option} {sif_path} {cmd}", check=True
+            )  # noqa
         elif self.engine_type == "podman":
             image_name = self.process_image_name_for_docker(image_name)
-            run_cmd(f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}", check=True)  # noqa
+            run_cmd(
+                f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}",
+                check=True,
+            )  # noqa
         else:
             raise NotImplementedError
 
 
 if __name__ == "__main__":
     import fire
+
     fire.Fire(ContainerEngine)

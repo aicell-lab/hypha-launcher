@@ -1,6 +1,6 @@
-site_name: triton-launcher Docs
+site_name: Hypha Launcher Docs
 
-repo_url: https://github.com/Nanguage/triton_launcher
+repo_url: https://github.com/aicell-lab/hypha-launcher
 
 theme: material
 
