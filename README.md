@@ -107,9 +107,4 @@ $ hypha-launcher --store-dir="./triton_store/" - run_launcher_server --slurm-set
 * [ ] Load balancing
 * [ ] Documentation
 
-## Other information
 
-This package was created with Cookiecutter and the `Nanguage/cookiecutter-pypackage` project template.
-
-+ Cookiecutter: https://github.com/audreyr/cookiecutter
-+ `Nanguage/cookiecutter-pypackage`: https://github.com/Nanguage/cookiecutter-pypackage
