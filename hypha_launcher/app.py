@@ -67,7 +67,7 @@ class App():
     def run_launcher_server(
             self,
             upstream_hypha_url: str = "https://ai.imjoy.io",
-            service_id: str = "hypha_launcher",
+            service_id: str = "hypha-launcher",
             hpc_type: T.Optional[str] = None,
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             ):
@@ -196,7 +196,7 @@ class App():
                 return res
 
             service = {
-                "name": "hypha_launcher",
+                "name": "hypha-launcher",
                 "id": service_id,
                 "config": {
                     "visibility": "public"
