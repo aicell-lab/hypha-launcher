@@ -108,3 +108,11 @@ $ hypha-launcher --store-dir="./triton_store/" - run_launcher_server --slurm-set
 * [ ] Documentation
 
 
+## Development
+Install the package in editable mode with the following command:
+
+```bash
+pip install -e .
+pip install -r requirements-dev.txt
+```
+
