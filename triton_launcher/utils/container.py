@@ -16,7 +16,7 @@ class ContainerEngine():
 
     def __init__(
             self,
-            store_dir: str = "~/.triton_launcher/containers",
+            store_dir: str = "~/.hypha_launcher/containers",
             engine_type: T.Optional[str] = None
             ):
 

@@ -26,7 +26,7 @@ logger = get_logger()
 class App():
     def __init__(
             self,
-            store_dir: str = "~/.triton_launcher",
+            store_dir: str = "~/.hypha_launcher",
             debug: bool = False):
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
@@ -67,7 +67,7 @@ class App():
     def run_launcher_server(
             self,
             upstream_hypha_url: str = "https://ai.imjoy.io",
-            service_id: str = "triton_launcher",
+            service_id: str = "hypha_launcher",
             hpc_type: T.Optional[str] = None,
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             ):
@@ -127,7 +127,7 @@ class App():
                 nonlocal worker_count
                 worker_count += 1
                 worker_id = f"worker_{worker_count}"
-                cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id} {get_login_hypha_url()}"  # noqa
+                cmd = f"python -m hypha_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id} {get_login_hypha_url()}"  # noqa
                 logger.info(f"Starting worker: {worker_id}")
                 logger.info(f"Command: {cmd}")
                 if hpc_type == "slurm":
@@ -196,7 +196,7 @@ class App():
                 return res
 
             service = {
-                "name": "triton_launcher",
+                "name": "hypha_launcher",
                 "id": service_id,
                 "config": {
                     "visibility": "public"
