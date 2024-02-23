@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest
-pytest-cov
-flake8
-mypy
+pytest==8.0.1
+pytest-cov==4.1.0
+flake8==7.0.0
+mypy==1.8.0
