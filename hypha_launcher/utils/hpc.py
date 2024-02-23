@@ -8,12 +8,13 @@ logger = get_logger()
 
 
 def SlurmSubprocess(
-        cmd: str,
-        account: str,
-        time: T.Optional[str] = None,
-        gpus_per_node: T.Optional[str] = None,
-        additonal_options: T.Optional[str] = None,
-        **attrs) -> SubprocessJob:
+    cmd: str,
+    account: str,
+    time: T.Optional[str] = None,
+    gpus_per_node: T.Optional[str] = None,
+    additonal_options: T.Optional[str] = None,
+    **attrs,
+) -> SubprocessJob:
     options_str = f"--account={account} "
     if time is not None:
         options_str += f"--time={time} "
