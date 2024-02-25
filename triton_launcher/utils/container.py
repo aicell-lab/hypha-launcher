@@ -109,6 +109,10 @@ class ContainerEngine():
             image_name = self.process_image_name_for_docker(image_name)
             run_cmd(f"docker run {volume_mapping} {port_mapping} {image_name} {cmd}", check=True)  # noqa
         elif self.engine_type == "apptainer":
+            # add tmp dir mapping when using apptainer
+            host_tmp_dir = self.store_dir / "apptainer_tmp"
+            host_tmp_dir.mkdir(exist_ok=True)
+            volumes[host_tmp_dir.as_posix()] = "/tmp"
             # Note: Apptainer (formerly Singularity) has different options
             sif_path = self.sif_files[image_name]
             # For Apptainer, bind options are used for volume mapping

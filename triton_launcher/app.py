@@ -14,7 +14,7 @@ from pyotritonclient import get_config, execute
 from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
 from .utils.container import ContainerEngine
-from .utils.misc import get_ip_address
+from .utils.misc import get_all_ips, check_ip_port
 from .utils.hpc import SlurmSubprocess, detect_hpc_type
 
 
@@ -34,6 +34,41 @@ class App():
         logger.info(f"Store dir: {self.store_dir}")
         self.debug = debug
         self.container_engine = ContainerEngine(self.store_dir / "containers")
+
+    def _record_login_node_ips(self):
+        ips = get_all_ips()
+        logger.info("Possible login node IPs:", str(ips))
+        ip_record_file = self.store_dir / "login_node_ips.txt"
+        with open(ip_record_file, "w") as f:
+            for ip in ips:
+                f.write(f"{ip[0]}\t{ip[1]}\n")
+        logger.info(f"Login node IPs are recorded to {ip_record_file}")
+        return ips
+
+    def _record_login_node_hypha_port(self, port: int):
+        port_record_file = self.store_dir / "login_node_hypha_port.txt"
+        with open(port_record_file, "w") as f:
+            f.write(str(port))
+        logger.info(f"Login node hypha port is recorded to {port_record_file}")
+
+    def _get_all_hypha_addresses(self) -> T.List[T.Tuple[str, str]]:
+        with open(self.store_dir / "login_node_ips.txt") as f:
+            lines = f.readlines()
+        ips = [line.strip().split("\t") for line in lines]
+        with open(self.store_dir / "login_node_hypha_port.txt") as f:
+            port = int(f.read().strip())
+        return [(ip[1], port) for ip in ips]
+
+    def _find_connectable_hypha_address(self) -> T.Union[str, None]:
+        hypha_server_url = None
+        hypha_addresses = self._get_all_hypha_addresses()
+        for ip, port in hypha_addresses:
+            logger.info(f"Checking hypha server: {ip}:{port}")
+            if check_ip_port(ip, port):
+                hypha_server_url = f"http://{ip}:{port}"
+                logger.info(f"Found connectable hypha server: {hypha_server_url}")  # noqa
+                break
+        return hypha_server_url
 
     async def download_models_from_s3(
             self, pattern: str,
@@ -75,7 +110,8 @@ class App():
         logger.info(f"Upstream hypha server: {upstream_hypha_url}")
         logger.info(f"Service id: {service_id}")
 
-        login_node_ip = get_ip_address()
+        ips = self._record_login_node_ips()
+        login_node_ip = ips[0][1]  # use the first ip as the login node ip
         login_hypha_port = None
         engine = Engine()
         worker_count = 0  # only increase
@@ -93,6 +129,7 @@ class App():
                 logger.error("Slurm settings is not provided.")
                 raise ValueError("Slurm settings is not provided.")
             assert "account" in slurm_settings, "account is required in slurm settings"  # noqa
+
         def get_login_hypha_url():
             return f"http://{login_node_ip}:{login_hypha_port}"
 
@@ -110,6 +147,7 @@ class App():
                 f"{login_node_ip}:{hypha_server_job.port}")
             nonlocal login_hypha_port
             login_hypha_port = hypha_server_job.port
+            self._record_login_node_hypha_port(login_hypha_port)
 
         async def main():
             """Start hypha server and link with the upstream hypha server."""
@@ -127,7 +165,7 @@ class App():
                 nonlocal worker_count
                 worker_count += 1
                 worker_id = f"worker_{worker_count}"
-                cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id} {get_login_hypha_url()}"  # noqa
+                cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id}"  # noqa
                 logger.info(f"Starting worker: {worker_id}")
                 logger.info(f"Command: {cmd}")
                 if hpc_type == "slurm":
@@ -218,9 +256,14 @@ class App():
     def run_worker(
             self,
             worker_id: str,
-            hypha_server_url: str):
+            hypha_server_url: T.Optional[str] = None):
         """Run a worker server, run in the compute node of HPC. """
         host_triton_port: T.Union[int, None] = None
+
+        if hypha_server_url is None:
+            hypha_server_url = self._find_connectable_hypha_address()
+            if hypha_server_url is None:
+                raise ValueError("Cannot connect to hypha server.")
 
         async def start_worker_server(server_url: str):
             server = await connect_to_server({"server_url": server_url})

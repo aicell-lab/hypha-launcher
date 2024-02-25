@@ -23,7 +23,8 @@ def get_install_requirements():
     requirements = [
         "aiohttp", "requests", "tqdm", "fire",
         "loguru", "executor-engine", "hypha",
-        "uvicorn", "imjoy-rpc", "pyotritonclient"
+        "uvicorn", "imjoy-rpc", "pyotritonclient",
+        "netifaces"
     ]
     return requirements
 
