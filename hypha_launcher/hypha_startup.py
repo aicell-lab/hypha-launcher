@@ -17,7 +17,7 @@ from .utils.log import get_logger
 from .utils.misc import get_all_ips, check_ip_port
 from .utils.hpc import SlurmSubprocess, detect_hpc_type
 from .utils.container import ContainerEngine
-from .constants import TRITON_IMAGE
+from .constants import TRITON_IMAGE, IMJOY_APP_TEMPLATE, S3_IMAGE
 
 logger = get_logger()
 
@@ -88,18 +88,16 @@ class LauncherTool:
             f"Linking to upstream hypha server: {self.upstream_hypha_url}"
         )  # noqa
 
-        async def hello(worker_id: str):
-            worker = await self.server.get_service(worker_id)
-            return await worker.hello()
-
-        async def launch_worker(sub_cmd: str) -> int:
+        async def launch_worker(sub_cmd: str, worker_type: T.Optional[str] = None) -> int:
             nonlocal worker_count
             worker_count += 1
             worker_id = f"worker_{worker_count}"
             cmd = f"python -m hypha_launcher.hypha_startup --store_dir={self.store_dir.as_posix()} - {sub_cmd} {worker_id}"  # noqa
             logger.info(f"Starting worker: {worker_id}")
             logger.info(f"Command: {cmd}")
-            if self.worker_type == "slurm":
+            if worker_type is None:
+                worker_type = self.worker_type
+            if worker_type == "slurm":
                 assert self.slurm_settings is not None
                 cmd_job = SlurmSubprocess(cmd, **self.slurm_settings)
             else:
@@ -112,6 +110,20 @@ class LauncherTool:
 
         async def launch_triton_worker() -> int:
             return await launch_worker("run_triton_worker")
+
+        async def launch_s3_server() -> int:
+            return await launch_worker("run_s3_server", worker_type="local")
+
+        async def launch_server_app(app_code: str):
+            controller = await self.server.get_service("server-apps")
+            imjoy_app_code = IMJOY_APP_TEMPLATE.format(app_code=app_code)
+            config = await controller.launch(
+                source=imjoy_app_code,
+                config={"type": "web-python"}
+            )
+            assert "app_id" in config
+            plugin = await self.server.get_plugin(config.id)
+            return plugin
 
         async def stop_worker(worker_id: str):
             if worker_id in workers_jobs:
@@ -132,17 +144,66 @@ class LauncherTool:
             "name": "hypha-launcher",
             "id": self.upstream_service_id,
             "config": {"visibility": "public"},
-            "get_config": get_config,
-            "execute": execute,
+            "launch_server_app": launch_server_app,
         }
         if self.debug:
             up_service["launch_worker"] = launch_worker
             up_service["stop_worker"] = stop_worker
-            up_service["hello"] = hello
         await upstream_server.register_service(up_service)
-        await launch_triton_worker()  # start a default worker
+        #await launch_triton_worker()  # start a default worker
+        await launch_s3_server()  # start a default worker
 
-    def run_triton_worker(
+    async def run_s3_server(
+            self,
+            worker_id: str):
+        """Run a worker server, run in the login node of HPC. """
+        host_port_1: T.Union[int, None] = None
+        host_port_2: T.Union[int, None] = None
+
+        hypha_server_url = self._find_connectable_hypha_address()
+        if hypha_server_url is None:
+            raise ValueError("Cannot connect to hypha server.")
+
+        async def start_worker_server(server_url: str):
+            server = await connect_to_server({"server_url": server_url})
+            await server.register_service(
+                {
+                    "name": "s3-worker",
+                    "id": worker_id,
+                    "config": {"visibility": "public"},
+                }
+            )
+
+        engine = Engine()
+        self.container_engine.pull_image(S3_IMAGE)
+
+        data_dir = self.store_dir / "s3_data"
+        data_dir.mkdir(exist_ok=True, parents=True)
+
+        async def start_s3_server():
+            def run_s3_server(host_port_1: int, host_port_2: int):
+                self.container_engine.run_command(
+                    f'server /data --console-address ":{host_port_2}" --address ":{host_port_1}"',  # noqa
+                    S3_IMAGE,
+                    ports={
+                        host_port_1: 9000,
+                        host_port_2: host_port_2,
+                    },
+                    volumes={str(data_dir): "/data"},
+                )
+
+            nonlocal host_port_1
+            nonlocal host_port_2
+            host_port_1 = PortManager.get_port()
+            host_port_2 = PortManager.get_port()
+            triton_job = ProcessJob(run_s3_server, args=(host_port_1, host_port_2))
+            await engine.submit_async(triton_job)
+
+        f1 = start_worker_server(hypha_server_url)
+        f2 = start_s3_server()
+        await asyncio.gather(f1, f2)
+
+    async def run_triton_worker(
             self,
             worker_id: str,
             hypha_server_url: T.Optional[str] = None):
@@ -156,10 +217,6 @@ class LauncherTool:
 
         async def start_worker_server(server_url: str):
             server = await connect_to_server({"server_url": server_url})
-
-            def hello():
-                print("Hello from worker")
-                return "Hello from worker"
 
             async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
                 if host_triton_port is not None:
@@ -205,7 +262,6 @@ class LauncherTool:
                     "name": "triton-worker",
                     "id": worker_id,
                     "config": {"visibility": "public"},
-                    "hello": hello,
                     "get_config": get_triton_config,
                     "execute": execute_triton,
                 }
@@ -228,10 +284,9 @@ class LauncherTool:
             triton_job = ProcessJob(run_triton_server, args=(host_triton_port,))
             await engine.submit_async(triton_job)
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(start_worker_server(hypha_server_url))
-        loop.create_task(start_triton_server())
-        loop.run_forever()
+        f1 = start_worker_server(hypha_server_url)
+        f2 = start_triton_server()
+        await asyncio.gather(f1, f2)
 
     def _record_login_node_ips(self):
         ips = get_all_ips()
