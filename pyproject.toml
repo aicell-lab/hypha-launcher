@@ -20,7 +20,8 @@ dependencies = [
     "hypha",
     "uvicorn",
     "imjoy-rpc",
-    "pyotritonclient"
+    "pyotritonclient",
+    "netifaces",
 ]
 
 [tool.setuptools]
