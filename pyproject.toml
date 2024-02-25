@@ -30,8 +30,3 @@ include-package-data = true
 [tool.setuptools.packages.find]
 include = ["hypha_launcher*"]
 exclude = ["tests*"]
-
-[options.entry_points]
-console_scripts = [
-    "hypha-launcher=hypha_launcher.__main__:main",
-]

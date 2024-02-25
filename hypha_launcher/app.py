@@ -24,7 +24,7 @@ logger = get_logger()
 
 
 class App:
-    def __init__(self, store_dir: str = "~/.hypha_launcher", debug: bool = False):
+    def __init__(self, store_dir: str = ".hypha_launcher", debug: bool = False):
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
@@ -104,6 +104,7 @@ class App:
         service_id: str = "hypha-launcher",
         hpc_type: T.Optional[str] = None,
         slurm_settings: T.Optional[T.Dict[str, str]] = None,
+        enable_server_apps: bool = True,
     ):
         """Start a launcher server, run in the login node of HPC."""
         logger.info(f"Upstream hypha server: {upstream_hypha_url}")
@@ -139,9 +140,9 @@ class App:
 
         async def run_hypha_server():
             """Run a hypha server in the login node."""
-            hypha_server_cmd = (
-                "python -m hypha.server --host={ip} --port={port}"  # noqa
-            )
+            hypha_server_cmd = "python -m hypha.server --host={ip} --port={port}"  # noqa
+            if enable_server_apps:
+                hypha_server_cmd += " --enable-server-apps"
             hypha_server_job = WebappJob(hypha_server_cmd, ip="0.0.0.0")
             await engine.submit_async(hypha_server_job)
             while True:
@@ -159,7 +160,7 @@ class App:
             """Start hypha server and link with the upstream hypha server."""
             await run_hypha_server()
 
-            server = await connect_to_server({"server_url": upstream_hypha_url})  # noqa
+            upstream_server = await connect_to_server({"server_url": upstream_hypha_url})  # noqa
             logger.info(
                 f"Linking to upstream hypha server: {upstream_hypha_url}"
             )  # noqa
@@ -175,7 +176,7 @@ class App:
                 nonlocal worker_count
                 worker_count += 1
                 worker_id = f"worker_{worker_count}"
-                cmd = f"python -m triton_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id}"  # noqa
+                cmd = f"python -m hypha_launcher --store_dir={self.store_dir.as_posix()} - run_worker {worker_id}"  # noqa
                 logger.info(f"Starting worker: {worker_id}")
                 logger.info(f"Command: {cmd}")
                 if hpc_type == "slurm":
@@ -247,7 +248,7 @@ class App:
                 service["start_worker"] = start_worker
                 service["stop_worker"] = stop_worker
                 service["hello"] = hello
-            await server.register_service(service)
+            await upstream_server.register_service(service)
             await start_worker()  # start a default worker
 
         loop = asyncio.get_event_loop()
