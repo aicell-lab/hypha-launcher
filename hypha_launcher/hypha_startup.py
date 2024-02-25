@@ -119,11 +119,12 @@ class LauncherTool:
             imjoy_app_code = IMJOY_APP_TEMPLATE.format(app_code=app_code)
             config = await controller.launch(
                 source=imjoy_app_code,
-                config={"type": "web-python"}
+                config={"type": "web-python"},
             )
             assert "app_id" in config
-            plugin = await self.server.get_plugin(config.id)
-            return plugin
+            f = asyncio.Future()
+            self.register_report_future(config["app_id"], f)
+            return await f
 
         async def stop_worker(worker_id: str):
             if worker_id in workers_jobs:
