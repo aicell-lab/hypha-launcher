@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "hypha-launcher"
+version = "0.1.0"
+readme = "README.md"
+description = "Launcher for hypha services"
+authors = [
+    {name = "Weize Xu", email = "vet.xwz@gmail.com" },
+    {name = "Wei Ouyang", email = "oeway007@gmail.com" }
+]
+dependencies = [
+    "aiohttp",
+    "requests",
+    "tqdm",
+    "fire",
+    "loguru",
+    "executor-engine",
+    "hypha",
+    "uvicorn",
+    "imjoy-rpc",
+    "pyotritonclient"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["hypha_launcher*"]
+exclude = ["tests*"]
+
+[options.entry_points]
+console_scripts = [
+    "hypha-launcher=hypha_launcher.__main__:main",
+]

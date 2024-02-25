@@ -23,11 +23,8 @@ TRITON_IMAGE = "docker://nvcr.io/nvidia/tritonserver:23.03-py3"
 logger = get_logger()
 
 
-class App():
-    def __init__(
-            self,
-            store_dir: str = "~/.triton_launcher",
-            debug: bool = False):
+class App:
+    def __init__(self, store_dir: str = "~/.hypha_launcher", debug: bool = False):
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
@@ -71,10 +68,12 @@ class App():
         return hypha_server_url
 
     async def download_models_from_s3(
-            self, pattern: str,
-            dest_dir: T.Optional[str] = None,
-            n_parallel: int = 5,
-            s3_base_url=S3_BASE_URL):
+        self,
+        pattern: str,
+        dest_dir: T.Optional[str] = None,
+        n_parallel: int = 5,
+        s3_base_url=S3_BASE_URL,
+    ):
         """Download models from S3
 
         Args:
@@ -93,20 +92,20 @@ class App():
         items = parse_s3_xml(xml_content, pattern)
         urls = [s3_base_url + item for item in items]
         await download_files(
-            urls, dest_dir, n_parallel=n_parallel,
-            base_url=s3_base_url)
+            urls, dest_dir, n_parallel=n_parallel, base_url=s3_base_url
+        )
 
     def pull_image(self, image_name: str = TRITON_IMAGE):
         self.container_engine.pull_image(image_name)
 
     def run_launcher_server(
-            self,
-            upstream_hypha_url: str = "https://ai.imjoy.io",
-            service_id: str = "triton_launcher",
-            hpc_type: T.Optional[str] = None,
-            slurm_settings: T.Optional[T.Dict[str, str]] = None,
-            ):
-        """Start a launcher server, run in the login node of HPC. """
+        self,
+        upstream_hypha_url: str = "https://ai.imjoy.io",
+        service_id: str = "hypha-launcher",
+        hpc_type: T.Optional[str] = None,
+        slurm_settings: T.Optional[T.Dict[str, str]] = None,
+    ):
+        """Start a launcher server, run in the login node of HPC."""
         logger.info(f"Upstream hypha server: {upstream_hypha_url}")
         logger.info(f"Service id: {service_id}")
 
@@ -119,7 +118,10 @@ class App():
         current_worker_id: T.Union[int, None] = None
 
         if hpc_type is not None:
-            assert hpc_type in ["slurm", "local"], f"Invalid hpc_type: {hpc_type}"  # noqa
+            assert hpc_type in [
+                "slurm",
+                "local",
+            ], f"Invalid hpc_type: {hpc_type}"  # noqa
         else:
             hpc_type = detect_hpc_type()
         logger.info(f"Computational environment: {hpc_type}")
@@ -128,14 +130,18 @@ class App():
             if slurm_settings is None:
                 logger.error("Slurm settings is not provided.")
                 raise ValueError("Slurm settings is not provided.")
-            assert "account" in slurm_settings, "account is required in slurm settings"  # noqa
+            assert (
+                "account" in slurm_settings
+            ), "account is required in slurm settings"  # noqa
 
         def get_login_hypha_url():
             return f"http://{login_node_ip}:{login_hypha_port}"
 
         async def run_hypha_server():
             """Run a hypha server in the login node."""
-            hypha_server_cmd = "python -m hypha.server --host={ip} --port={port}" # noqa
+            hypha_server_cmd = (
+                "python -m hypha.server --host={ip} --port={port}"  # noqa
+            )
             hypha_server_job = WebappJob(hypha_server_cmd, ip="0.0.0.0")
             await engine.submit_async(hypha_server_job)
             while True:
@@ -143,8 +149,8 @@ class App():
                     break
                 await asyncio.sleep(0.5)
             logger.info(
-                "Hypha server started at: "
-                f"{login_node_ip}:{hypha_server_job.port}")
+                "Hypha server started at: " f"{login_node_ip}:{hypha_server_job.port}"
+            )
             nonlocal login_hypha_port
             login_hypha_port = hypha_server_job.port
             self._record_login_node_hypha_port(login_hypha_port)
@@ -153,11 +159,15 @@ class App():
             """Start hypha server and link with the upstream hypha server."""
             await run_hypha_server()
 
-            server = await connect_to_server({"server_url": upstream_hypha_url}) # noqa
-            logger.info(f"Linking to upstream hypha server: {upstream_hypha_url}") # noqa
+            server = await connect_to_server({"server_url": upstream_hypha_url})  # noqa
+            logger.info(
+                f"Linking to upstream hypha server: {upstream_hypha_url}"
+            )  # noqa
 
             async def hello(worker_id: str):
-                server = await connect_to_server({"server_url": get_login_hypha_url()}) # noqa
+                server = await connect_to_server(
+                    {"server_url": get_login_hypha_url()}
+                )  # noqa
                 worker = await server.get_service(worker_id)
                 return await worker.hello()
 
@@ -170,15 +180,9 @@ class App():
                 logger.info(f"Command: {cmd}")
                 if hpc_type == "slurm":
                     assert slurm_settings is not None
-                    cmd_job = SlurmSubprocess(
-                        cmd,
-                        **slurm_settings
-                    )
+                    cmd_job = SlurmSubprocess(cmd, **slurm_settings)
                 else:
-                    cmd_job = SubprocessJob(
-                        cmd,
-                        base_class=ProcessJob
-                    )
+                    cmd_job = SubprocessJob(cmd, base_class=ProcessJob)
                 nonlocal current_worker_id
                 current_worker_id = worker_id
                 await engine.submit_async(cmd_job)
@@ -200,45 +204,42 @@ class App():
                     return True
                 return False
 
-            async def get_config(
-                    model_name: str, verbose: bool = False):
-                server = await connect_to_server({"server_url": get_login_hypha_url()})  # noqa
+            async def get_config(model_name: str, verbose: bool = False):
+                server = await connect_to_server(
+                    {"server_url": get_login_hypha_url()}
+                )  # noqa
                 if current_worker_id is None:
                     logger.error("No worker is running.")
-                    return {
-                        "error": "No worker is running."
-                    }
+                    return {"error": "No worker is running."}
                 worker = await server.get_service(current_worker_id)
                 res = await worker.get_config(model_name, verbose=verbose)
                 return res
 
             async def execute(
-                    inputs: T.Union[T.Any, None] = None,
-                    model_name: T.Union[str, None] = None,
-                    cache_config: bool = True,
-                    **kwargs
-                    ):
-                server = await connect_to_server({"server_url": get_login_hypha_url()})  # noqa
+                inputs: T.Union[T.Any, None] = None,
+                model_name: T.Union[str, None] = None,
+                cache_config: bool = True,
+                **kwargs,
+            ):
+                server = await connect_to_server(
+                    {"server_url": get_login_hypha_url()}
+                )  # noqa
                 if current_worker_id is None:
                     logger.error("No worker is running.")
-                    return {
-                        "error": "No worker is running."
-                    }
+                    return {"error": "No worker is running."}
                 worker = await server.get_service(current_worker_id)
                 res = await worker.execute(
                     inputs=inputs,
                     model_name=model_name,
                     cache_config=cache_config,
-                    **kwargs
+                    **kwargs,
                 )
                 return res
 
             service = {
-                "name": "triton_launcher",
+                "name": "hypha-launcher",
                 "id": service_id,
-                "config": {
-                    "visibility": "public"
-                },
+                "config": {"visibility": "public"},
                 "get_config": get_config,
                 "execute": execute,
             }
@@ -278,26 +279,22 @@ class App():
                         res = await get_config(
                             f"http://127.0.0.1:{host_triton_port}",
                             model_name=model_name,
-                            verbose=verbose
+                            verbose=verbose,
                         )
                         return res
                     except Exception as e:
                         logger.error(f"Error: {e}")
-                        return {
-                            "error": str(e)
-                        }
+                        return {"error": str(e)}
                 else:
                     logger.error("Triton server is not started yet.")
-                    return {
-                        "error": "Triton server is not started yet."
-                    }
+                    return {"error": "Triton server is not started yet."}
 
             async def execute_triton(
-                    inputs: T.Union[T.Any, None] = None,
-                    model_name: T.Union[str, None] = None,
-                    cache_config: bool = True,
-                    **kwargs
-                    ):
+                inputs: T.Union[T.Any, None] = None,
+                model_name: T.Union[str, None] = None,
+                cache_config: bool = True,
+                **kwargs,
+            ):
                 if host_triton_port is not None:
                     try:
                         res = await execute(
@@ -305,30 +302,26 @@ class App():
                             server_url=f"http://127.0.0.1:{host_triton_port}",
                             model_name=model_name,
                             cache_config=cache_config,
-                            **kwargs
+                            **kwargs,
                         )
                         return res
                     except Exception as e:
                         logger.error(f"Error: {e}")
-                        return {
-                            "error": str(e)
-                        }
+                        return {"error": str(e)}
                 else:
                     logger.error("Triton server is not started yet.")
-                    return {
-                        "error": "Triton server is not started yet."
-                    }
+                    return {"error": "Triton server is not started yet."}
 
-            await server.register_service({
-                "name": "worker",
-                "id": worker_id,
-                "config": {
-                    "visibility": "public"
-                },
-                "hello": hello,
-                "get_config": get_triton_config,
-                "execute": execute_triton,
-            })
+            await server.register_service(
+                {
+                    "name": "worker",
+                    "id": worker_id,
+                    "config": {"visibility": "public"},
+                    "hello": hello,
+                    "get_config": get_triton_config,
+                    "execute": execute_triton,
+                }
+            )
 
         engine = Engine()
         self.container_engine.pull_image(TRITON_IMAGE)
@@ -336,20 +329,15 @@ class App():
         async def start_triton_server():
             def run_triton_server(host_port: int):
                 self.container_engine.run_command(
-                    f"bash -c \"tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}\"",  # noqa
+                    f'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}"',  # noqa
                     TRITON_IMAGE,
-                    ports={
-                        host_port: host_port
-                    },
-                    volumes={
-                        str(self.store_dir / "models"): "/models"
-                    }
+                    ports={host_port: host_port},
+                    volumes={str(self.store_dir / "models"): "/models"},
                 )
+
             nonlocal host_triton_port
             host_triton_port = PortManager.get_port()
-            triton_job = ProcessJob(
-                run_triton_server, args=(host_triton_port,)
-            )
+            triton_job = ProcessJob(run_triton_server, args=(host_triton_port,))
             await engine.submit_async(triton_job)
 
         loop = asyncio.get_event_loop()

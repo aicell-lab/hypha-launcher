@@ -1,0 +1,4 @@
+-r requirements-test.txt
+mkdocs==1.5.3
+mkdocs-material==9.5.10
+black==24.2.0
