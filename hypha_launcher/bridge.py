@@ -23,7 +23,9 @@ logger = get_logger()
 
 class HyphaBridge:
     def __init__(
-            self, server = None,
+            self,
+            server: T.Optional[T.Dict] = None,
+            engine: T.Optional[Engine] = None,
             store_dir: str = ".hypha_launcher_store",
             upstream_hypha_url: T.Optional[str] = "https://ai.imjoy.io",
             upstream_service_id: T.Optional[str] = "hypha-launcher",
@@ -31,6 +33,7 @@ class HyphaBridge:
             debug: bool = False,
             ):
         self.server = server
+        self.engine = engine
         self.store_dir = Path(store_dir)
         self.upstream_hypha_url = upstream_hypha_url
         self.upstream_service_id = upstream_service_id
@@ -67,7 +70,7 @@ class HyphaBridge:
                 "account" in self.slurm_settings
             ), "account is required in slurm settings"  # noqa
 
-        engine = Engine()
+        engine = self.engine
         worker_count = 0  # only increase
         workers_jobs: T.Dict[str, Job] = {}
         current_worker_id: T.Union[int, None] = None

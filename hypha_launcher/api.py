@@ -29,6 +29,16 @@ class HyphaLauncher:
         self.container_engine = ContainerEngine(self.store_dir / "containers")
         self.engine = Engine()
 
+    def get_jobs_ids(self) -> T.List[str]:
+        return [job.id for job in self.engine.jobs]
+
+    async def stop_job(self, job_id: str) -> bool:
+        job = self.engine.jobs.get_job_by_id(job_id)
+        if job is not None:
+            await job.cancel()
+            return True
+        return False
+
     async def download_models_from_s3(
         self,
         pattern: str,
@@ -81,20 +91,25 @@ class HyphaLauncher:
                 },
                 volumes={str(data_dir): "/data"},
             )
-            triton_job = SubprocessJob(cmd, base_class=ProcessJob)
-            await engine.submit_async(triton_job)
-            return port, console_port
+            job = SubprocessJob(cmd, base_class=ProcessJob)
+            await engine.submit_async(job)
+            return job, port, console_port
 
-        port, console_port = await start_s3_server()
+        job, port, console_port = await start_s3_server()
         return {
+            "job_id": job.id,
             "console_port": port,
             "port": console_port,
+            "stop": job.cancel
         }
 
     async def launch_job(self, job: Job):
         """Launch an executor job."""
         await self.engine.submit_async(job)
-        return job
+        return {
+            "job_id": job.id,
+            "stop": job.cancel
+        }
 
     async def launch_server_app(self, server, app_code: str):
         from .constants import IMJOY_APP_TEMPLATE
@@ -114,7 +129,8 @@ class HyphaLauncher:
             ):
         """Launch a Triton server."""
         bridge = HyphaBridge(
-            server,
+            server=server,
+            engine=self.engine,
             store_dir=str(self.store_dir),
             upstream_hypha_url=None,
             upstream_service_id=None,
