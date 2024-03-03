@@ -1,10 +1,10 @@
-from .app import App
+from .api import HyphaLauncher
 
 
 def main():
     import fire
 
-    fire.Fire(App)
+    fire.Fire(HyphaLauncher)
 
 
 if __name__ == "__main__":

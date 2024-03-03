@@ -73,15 +73,14 @@ class ContainerEngine:
         else:
             raise NotImplementedError
 
-    def run_command(
+    def get_command(
         self,
         cmd: str,
         image_name: str,
         volumes: T.Optional[dict] = None,
         ports: T.Optional[dict] = None,
-    ):
-        """Start container with a command,
-        supporting volume and port mapping.
+    ) -> str:
+        """Get the command for run process in the container
 
         Args:
             cmd (str): command to run in the container
@@ -105,10 +104,7 @@ class ContainerEngine:
         # Construct the command based on the engine type
         if self.engine_type == "docker":
             image_name = self.process_image_name_for_docker(image_name)
-            run_cmd(
-                f"docker run {volume_mapping} {port_mapping} {image_name} {cmd}",
-                check=True,
-            )  # noqa
+            return f"docker run --rm {volume_mapping} {port_mapping} {image_name} {cmd}"
         elif self.engine_type == "apptainer":
             # add tmp dir mapping when using apptainer
             host_tmp_dir = self.store_dir / "apptainer_tmp"
@@ -121,15 +117,10 @@ class ContainerEngine:
             if volumes:
                 binds = [f"{host}:{container}" for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
-            run_cmd(
-                f"apptainer run --contain {bind_option} {sif_path} {cmd}", check=True
-            )  # noqa
+            return f"apptainer run --contain {bind_option} {sif_path} {cmd}"
         elif self.engine_type == "podman":
             image_name = self.process_image_name_for_docker(image_name)
-            run_cmd(
-                f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}",
-                check=True,
-            )  # noqa
+            return f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}"
         else:
             raise NotImplementedError
 

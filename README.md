@@ -81,20 +81,6 @@ $ hypha-launcher --store-dir="./triton_store" - download_models_from_s3 bioengin
 $ hypha-launcher --store-dir="./triton_store" - pull_image
 ```
 
-### Start launcher
-
-On local machine:
-
-```bash
-$ hypha-launcher --store-dir="./triton_store/" - run_launcher_server 
-```
-
-On HPC(Slurm):
-
-```bash
-$ hypha-launcher --store-dir="./triton_store/" - run_launcher_server --slurm-settings='{"account": "your-account", "gpus_per_node": "V100:1", "time": "01:00:00"}'
-```
-
 ## TODO
 
 * [x] Download model from s3

@@ -1,31 +1,8 @@
 import typing as T
-from executor.engine.job.extend.subprocess import SubprocessJob
-
 from .log import get_logger
 from .misc import run_cmd
 
 logger = get_logger()
-
-
-def SlurmSubprocess(
-    cmd: str,
-    account: str,
-    time: T.Optional[str] = None,
-    gpus_per_node: T.Optional[str] = None,
-    additonal_options: T.Optional[str] = None,
-    **attrs,
-) -> SubprocessJob:
-    options_str = f"--account={account} "
-    if time is not None:
-        options_str += f"--time={time} "
-    if gpus_per_node is not None:
-        options_str += f"--gpus-per-node={gpus_per_node} "
-    if additonal_options is not None:
-        options_str += additonal_options
-    new_cmd = f"srun {options_str} {cmd}"
-    logger.info(f"Slurm command: {new_cmd}")
-    p = SubprocessJob(new_cmd, **attrs)
-    return p
 
 
 def detect_hpc_type() -> str:
@@ -40,3 +17,34 @@ def detect_hpc_type() -> str:
     except FileNotFoundError:
         pass
     return "local"
+
+
+class HPCManger:
+    def __init__(self):
+        self.hpc_type = detect_hpc_type()
+        self.logger = get_logger()
+
+    def get_command(self, cmd: str, **attrs) -> str:
+        if self.hpc_type == "slurm":
+            return self.get_slurm_command(cmd, **attrs)
+        elif self.hpc_type == "local":
+            return cmd
+        else:
+            raise NotImplementedError(f"Unsupported HPC type: {self.hpc_type}")
+
+    def get_slurm_command(
+            cmd: str,
+            account: str,
+            time: T.Optional[str] = None,
+            gpus_per_node: T.Optional[str] = None,
+            additonal_options: T.Optional[str] = None,
+            ) -> str:
+        options_str = f"--account={account} "
+        if time is not None:
+            options_str += f"--time={time} "
+        if gpus_per_node is not None:
+            options_str += f"--gpus-per-node={gpus_per_node} "
+        if additonal_options is not None:
+            options_str += additonal_options
+        new_cmd = f"srun {options_str} {cmd}"
+        return new_cmd
