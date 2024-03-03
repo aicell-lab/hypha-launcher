@@ -3,6 +3,7 @@ import json
 import asyncio
 import typing as T
 from pathlib import Path
+from functools import partial
 
 from executor.engine import Engine
 from executor.engine.job.extend import WebappJob, SubprocessJob
@@ -12,7 +13,7 @@ from executor.engine.utils import PortManager
 from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
 from .utils.container import ContainerEngine
-from .constants import S3_BASE_URL, TRITON_IMAGE, S3_IMAGE
+from .constants import S3_MODELS_URL, S3_CONDA_ENVS_URL, TRITON_IMAGE, S3_IMAGE
 from .bridge import HyphaBridge
 
 
@@ -39,14 +40,14 @@ class HyphaLauncher:
             return True
         return False
 
-    async def download_models_from_s3(
+    async def download_from_s3(
         self,
         pattern: str,
         dest_dir: T.Optional[str] = None,
         n_parallel: int = 5,
         s3_base_url=S3_BASE_URL,
     ):
-        """Download models from S3
+        """Download files from S3
 
         Args:
             pattern (str): pattern to match model files
@@ -66,6 +67,9 @@ class HyphaLauncher:
         await download_files(
             urls, dest_dir, n_parallel=n_parallel, base_url=s3_base_url
         )
+    
+    download_models_from_s3 = partial(download_from_s3, s3_base_url=S3_MODELS_URL)
+    download_conda_envs_from_s3 = partial(download_from_s3, s3_base_url=S3_CONDA_ENVS_URL)
 
     def pull_image(self, image_name: str = TRITON_IMAGE):
         self.container_engine.pull_image(image_name)
