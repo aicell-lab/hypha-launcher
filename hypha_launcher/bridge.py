@@ -112,6 +112,8 @@ class HyphaBridge:
                 return True
             return False
 
+        await launch_triton_worker()  # start a default worker
+
         if (self.upstream_hypha_url is not None) and (self.upstream_service_id is not None):
             up_service = {
                 "name": "hypha-launcher",
@@ -129,7 +131,14 @@ class HyphaBridge:
             )  # noqa
 
             await upstream_server.register_service(up_service)
-        await launch_triton_worker()  # start a default worker
+        else:
+            service = self.server.get_service(current_worker_id)
+            return {
+                "job_id": workers_jobs[current_worker_id].id,
+                "stop": lambda: stop_worker(current_worker_id),
+                "execute": service.execute,
+                "get_config": service.get_config,
+            }
 
     async def run_triton_worker(
             self,

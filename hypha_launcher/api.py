@@ -138,4 +138,4 @@ class HyphaLauncher:
             slurm_settings=slurm_settings,
             debug=self.debug,
         )
-        await bridge.run()
+        return await bridge.run()
