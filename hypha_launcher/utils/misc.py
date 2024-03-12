@@ -1,8 +1,9 @@
 import typing as T
+import os
 import subprocess as subp
 import socket
 
-import netifaces as ni
+import psutil
 
 from .log import get_logger
 
@@ -19,20 +20,12 @@ def run_cmd(cmd: T.Union[str, T.List[str]], check: bool = True):
         subp.run(cmd, shell=True, check=check)
 
 
-def get_all_ips(
-        ip_type: T.Literal["ipv4", "ipv6"] = "ipv4"
-        ) -> T.List[T.Tuple[str, str]]:
+def get_all_ips() -> T.List[T.Tuple[str, str]]:
     ip_info = []
-    for interface in ni.interfaces():
-        if interface == "lo":
-            continue
-        addresses = ni.ifaddresses(interface)
-        if ip_type == "ipv4":
-            ip = addresses.get(ni.AF_INET, [{}])[0].get('addr')
-        else:
-            ip = addresses.get(ni.AF_INET6, [{}])[0].get('addr')
-        if ip:
-            ip_info.append((interface, ip))
+    for interface, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if addr.family == socket.AF_INET:  # IPv4
+                ip_info.append((interface, addr.address))
     return ip_info
 
 
@@ -42,3 +35,31 @@ def check_ip_port(ip, port):
     result = sock.connect_ex((ip, port))
     sock.close()
     return result == 0
+
+
+def detect_runtime_environment():
+    # Check for Docker and Podman through /proc/self/cgroup
+    try:
+        with open('/proc/self/cgroup', 'rt') as ifh:
+            cgroup_contents = ifh.read()
+            if 'docker' in cgroup_contents or '/docker/' in cgroup_contents:
+                return 'Docker'
+            elif 'podman' in cgroup_contents or '/libpod/' in cgroup_contents:
+                return 'Podman'
+    except FileNotFoundError:
+        pass  # /proc/self/cgroup does not exist, not in a container, or not allowed to read
+
+    # Check for Kubernetes by looking for specific environment variables
+    if os.getenv('KUBERNETES_SERVICE_HOST'):
+        return 'Kubernetes'
+
+    # Check for Apptainer/Singularity by looking for environment variables set by it
+    if os.getenv('SINGULARITY_CONTAINER') or os.getenv('APPTAINER_CONTAINER'):
+        return 'Apptainer/Singularity'
+
+    # Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return 'Docker'
+
+    # No indicators found
+    return 'Unknown'

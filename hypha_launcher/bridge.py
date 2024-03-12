@@ -1,5 +1,3 @@
-import os
-import json
 import asyncio
 import typing as T
 from pathlib import Path
@@ -11,6 +9,7 @@ from executor.engine.job import ProcessJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
 from pyotritonclient import get_config, execute
+from cloudpickle import dumps, loads
 
 from .utils.log import get_logger
 from .utils.misc import get_all_ips, check_ip_port, run_cmd
@@ -21,46 +20,137 @@ from .constants import TRITON_IMAGE
 logger = get_logger()
 
 
+class BridgeWorker:
+    def __init__(
+            self,
+            worker_id: str,
+            store_dir: Path = Path(".hypha_launcher_store")
+            ):
+        self.worker_id = worker_id
+        self.store_dir = store_dir
+
+    def run(self, container_engine: ContainerEngine, **kwargs):
+        pass
+
+    def register_service(self, server):
+        pass
+
+
+class TritonWorker(BridgeWorker):
+    def run(
+            self,
+            container_engine: ContainerEngine,
+            **kwargs):
+        container_engine.pull_image(TRITON_IMAGE)
+        host_port = PortManager.get_port()
+        store_dir = self.store_dir
+        cmd = container_engine.get_command(
+            f'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}"',  # noqa
+            TRITON_IMAGE,
+            ports={host_port: host_port},
+            volumes={str(store_dir / "models"): "/models"},
+        )
+        self.host_port = host_port
+        run_cmd(cmd, check=True)
+
+    async def register_service(self, server):
+        async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
+            if self.host_port is not None:
+                try:
+                    res = await get_config(
+                        f"http://127.0.0.1:{self.host_port}",
+                        model_name=model_name,
+                        verbose=verbose,
+                    )
+                    return res
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    return {"error": str(e)}
+            else:
+                logger.error("Triton server is not started yet.")
+                return {"error": "Triton server is not started yet."}
+
+        async def execute_triton(
+            inputs: T.Union[T.Any, None] = None,
+            model_name: T.Union[str, None] = None,
+            cache_config: bool = True,
+            **kwargs,
+        ):
+            if self.host_port is not None:
+                try:
+                    res = await execute(
+                        inputs=inputs,
+                        server_url=f"http://127.0.0.1:{self.host_port}",
+                        model_name=model_name,
+                        cache_config=cache_config,
+                        **kwargs,
+                    )
+                    return res
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    return {"error": str(e)}
+            else:
+                logger.error("Triton server is not started yet.")
+                return {"error": "Triton server is not started yet."}
+
+        await server.register_service(
+            {
+                "name": self.worker_id,
+                "id": self.worker_id,
+                "config": {"visibility": "public"},
+                "get_config": get_triton_config,
+                "execute": execute_triton,
+            }
+        )
+
+
 class HyphaBridge:
     def __init__(
             self,
-            server: T.Optional[T.Dict] = None,
+            server: T.Optional[T.Union[T.Dict, str]] = None,
             engine: T.Optional[Engine] = None,
             store_dir: str = ".hypha_launcher_store",
-            upstream_hypha_url: T.Optional[str] = "https://ai.imjoy.io",
-            upstream_service_id: T.Optional[str] = "hypha-launcher",
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             debug: bool = False,
             ):
         self.server = server
         self.engine = engine
         self.store_dir = Path(store_dir)
-        self.upstream_hypha_url = upstream_hypha_url
-        self.upstream_service_id = upstream_service_id
         self.debug = debug
 
         self.hpc_manager = HPCManger()
 
         self.slurm_settings = slurm_settings
-        self.container_engine = ContainerEngine(self.store_dir / "containers")
+        self.container_engine = ContainerEngine(
+            str(self.store_dir / "containers"))
 
     @property
     def server_port(self) -> int:
-        public_url = self.server.config["public_base_url"]
+        assert isinstance(self.server, dict)
+        public_url = self.server['config']["public_base_url"]
         hypha_port = int(public_url.split(":")[-1])
         return hypha_port
 
-    @property
-    def hypha_url(self) -> str:
-        ips = self._record_login_node_ips()
-        login_node_ip = ips[0][1]  # use the first ip as the login node ip
-        return f"http://{login_node_ip}:{self.server_port}"
-
-    async def run(self):
+    async def run(
+            self,
+            worker_types: T.Optional[T.Dict[str, T.Type[BridgeWorker]]] = None,  # noqa
+            ):
+        if isinstance(self.server, str):
+            logger.info(f"Connecting to hypha server: {self.server}")
+            self.server = await connect_to_server({"server_url": self.server})
+            assert isinstance(self.server, dict)
+            logger.info(f"Connected to hypha server: {self.server['config']['public_base_url']}")  # noqa
         assert self.server is not None, "Server is not provided."
         self._record_hypha_server_port(self.server_port)
+        self._record_login_node_ips()
 
-        logger.info(f"Computational environment(worker type): {self.hpc_manager.hpc_type}")
+        worker_types = worker_types or {
+            "triton": TritonWorker,
+        }
+        self._store_worker_types(worker_types)
+        logger.info(f"Worker types: {worker_types}")
+
+        logger.info(f"Computational environment(worker type): {self.hpc_manager.hpc_type}")  # noqa
         if self.hpc_manager.hpc_type == "slurm":
             logger.info(f"Slurm settings: {self.slurm_settings}")
             if self.slurm_settings is None:
@@ -70,32 +160,49 @@ class HyphaBridge:
                 "account" in self.slurm_settings
             ), "account is required in slurm settings"  # noqa
 
+        assert self.engine is not None, "Engine is not provided."
         engine = self.engine
         worker_count = 0  # only increase
         workers_jobs: T.Dict[str, Job] = {}
-        current_worker_id: T.Union[int, None] = None
+        current_worker_id: T.Union[str, None] = None
 
-        async def launch_worker(sub_cmd: str, worker_type: T.Optional[str] = None) -> int:
+        async def launch_worker(
+                worker_type: str,
+                hpc_type: T.Optional[str] = None,
+                worker_id: T.Optional[str] = None,
+                ) -> dict:
             nonlocal worker_count
             worker_count += 1
-            worker_id = f"worker_{worker_count}"
-            cmd = f"python -m hypha_launcher.bridge --store_dir={self.store_dir.as_posix()} - {sub_cmd} {worker_id}"  # noqa
+            if worker_id is None:
+                worker_id = f"hypha_bridge_worker_{worker_count}"
+            cmd = "python -m hypha_launcher.bridge " + \
+                  f"--store_dir={self.store_dir.as_posix()} - " + \
+                  f"run_worker {worker_type} {worker_id}"
             logger.info(f"Starting worker: {worker_id}")
             logger.info(f"Command: {cmd}")
-            if worker_type is None:
-                worker_type = self.hpc_manager.hpc_type
-            if worker_type == "slurm":
+            if hpc_type is None:
+                hpc_type = self.hpc_manager.hpc_type
+            if hpc_type == "slurm":
                 assert self.slurm_settings is not None
-                cmd = self.hpc_manager.get_slurm_command(cmd, **self.slurm_settings)
+                cmd = self.hpc_manager.get_slurm_command(cmd, **self.slurm_settings)  # noqa
             cmd_job = SubprocessJob(cmd, base_class=ProcessJob)
             nonlocal current_worker_id
             current_worker_id = worker_id
             await engine.submit_async(cmd_job)
+            await cmd_job.wait_until_status("running")
             workers_jobs[worker_id] = cmd_job
-            return worker_id
-
-        async def launch_triton_worker() -> int:
-            return await launch_worker("run_triton_worker")
+            while True:
+                logger.info(f"Waiting for worker: {worker_id}")
+                try:
+                    service = await self.server.get_service(worker_id)
+                    break
+                except Exception as e:
+                    logger.debug(f"Error: {e}")
+                    await asyncio.sleep(2)
+            return {
+                "worker_id": worker_id,
+                "service": service
+            }
 
         async def stop_worker(worker_id: str):
             if worker_id in workers_jobs:
@@ -104,127 +211,75 @@ class HyphaBridge:
                 del workers_jobs[worker_id]
                 nonlocal current_worker_id
                 if worker_id == current_worker_id:
-                    if worker_count > 0:
-                        new_worker_id = workers_jobs.keys()[0]
+                    if len(workers_jobs) > 0:
+                        new_worker_id = list(workers_jobs.keys())[0]
                         current_worker_id = new_worker_id
                     else:
                         current_worker_id = None
                 return True
             return False
 
-        await launch_triton_worker()  # start a default worker
+        async def get_all_workers():
+            return list(workers_jobs.keys())
 
-        if (self.upstream_hypha_url is not None) and (self.upstream_service_id is not None):
-            up_service = {
-                "name": "hypha-launcher",
-                "id": self.upstream_service_id,
-                "config": {"visibility": "public"},
-                "launch_triton_worker": launch_triton_worker,
+        await self.server.register_service(
+            {
+                "name": "Hypha Bridge",
+                "id": "hypha-bridge",
+                "launch_worker": launch_worker,
+                "stop_worker": stop_worker,
+                "get_all_workers": get_all_workers,
             }
-            if self.debug:
-                up_service["launch_worker"] = launch_worker
-                up_service["stop_worker"] = stop_worker
+        )
 
-            upstream_server = await connect_to_server({"server_url": self.upstream_hypha_url})  # noqa
-            logger.info(
-                f"Linking to upstream hypha server: {self.upstream_hypha_url}"
-            )  # noqa
-
-            await upstream_server.register_service(up_service)
-        else:
-            service = self.server.get_service(current_worker_id)
-            return {
-                "job_id": workers_jobs[current_worker_id].id,
-                "stop": lambda: stop_worker(current_worker_id),
-                "execute": service.execute,
-                "get_config": service.get_config,
-            }
-
-    async def run_triton_worker(
+    def run_worker(
             self,
+            worker_type: str,
             worker_id: str,
             hypha_server_url: T.Optional[str] = None):
         """Run a worker server, run in the compute node of HPC. """
-        host_triton_port: T.Union[int, None] = None
-
         if hypha_server_url is None:
             hypha_server_url = self._find_connectable_hypha_address()
             if hypha_server_url is None:
                 raise ValueError("Cannot connect to hypha server.")
 
-        async def start_worker_server(server_url: str):
+        worker_types = self._load_worker_types()
+        worker = worker_types[worker_type](worker_id, self.store_dir)
+
+        async def register_service(server_url: str):
             server = await connect_to_server({"server_url": server_url})
-
-            async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
-                if host_triton_port is not None:
-                    try:
-                        res = await get_config(
-                            f"http://127.0.0.1:{host_triton_port}",
-                            model_name=model_name,
-                            verbose=verbose,
-                        )
-                        return res
-                    except Exception as e:
-                        logger.error(f"Error: {e}")
-                        return {"error": str(e)}
-                else:
-                    logger.error("Triton server is not started yet.")
-                    return {"error": "Triton server is not started yet."}
-
-            async def execute_triton(
-                inputs: T.Union[T.Any, None] = None,
-                model_name: T.Union[str, None] = None,
-                cache_config: bool = True,
-                **kwargs,
-            ):
-                if host_triton_port is not None:
-                    try:
-                        res = await execute(
-                            inputs=inputs,
-                            server_url=f"http://127.0.0.1:{host_triton_port}",
-                            model_name=model_name,
-                            cache_config=cache_config,
-                            **kwargs,
-                        )
-                        return res
-                    except Exception as e:
-                        logger.error(f"Error: {e}")
-                        return {"error": str(e)}
-                else:
-                    logger.error("Triton server is not started yet.")
-                    return {"error": "Triton server is not started yet."}
-
-            await server.register_service(
-                {
-                    "name": "triton-worker",
-                    "id": worker_id,
-                    "config": {"visibility": "public"},
-                    "get_config": get_triton_config,
-                    "execute": execute_triton,
-                }
-            )
+            await worker.register_service(server)
 
         engine = Engine()
         self.container_engine.pull_image(TRITON_IMAGE)
 
-        async def start_triton_server():
-            def run_triton_server(host_port: int):
-                cmd = self.container_engine.get_command(
-                    f'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}"',  # noqa
-                    TRITON_IMAGE,
-                    ports={host_port: host_port},
-                    volumes={str(self.store_dir / "models"): "/models"},
-                )
-                run_cmd(cmd, check=True)
-
-            nonlocal host_triton_port
-            host_triton_port = PortManager.get_port()
-            triton_job = ProcessJob(run_triton_server, args=(host_triton_port,))
+        async def start_run_worker():
+            triton_job = ProcessJob(
+                worker.run,
+                args=(self.container_engine,)
+            )
             await engine.submit_async(triton_job)
 
-        f1 = start_worker_server(hypha_server_url)
-        f2 = start_triton_server()
-        await asyncio.gather(f1, f2)
+        async def main():
+            f1 = register_service(hypha_server_url)
+            f2 = start_run_worker()
+            await asyncio.gather(f1, f2)
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(main())
+        loop.run_forever()
+
+    def _store_worker_types(self, worker_types: T.Dict[str, T.Type[BridgeWorker]]):  # noqa
+        worker_types_file = self.store_dir / "worker_types.pkl"
+        with open(worker_types_file, "wb") as f:
+            f.write(dumps(worker_types))
+        logger.info(f"Worker types are stored to {worker_types_file}")
+
+    def _load_worker_types(self) -> T.Dict[str, T.Type[BridgeWorker]]:
+        worker_types_file = self.store_dir / "worker_types.pkl"
+        with open(worker_types_file, "rb") as f:
+            worker_types = loads(f.read())
+        return worker_types
 
     def _record_login_node_ips(self):
         ips = get_all_ips()
@@ -241,7 +296,7 @@ class HyphaBridge:
             f.write(str(port))
         logger.info(f"Hypha server port is recorded to {port}")
 
-    def _get_all_hypha_addresses(self) -> T.List[T.Tuple[str, str]]:
+    def _get_all_hypha_addresses(self) -> T.List[T.Tuple[str, int]]:
         with open(self.store_dir / "login_node_ips.txt") as f:
             lines = f.readlines()
         ips = [line.strip().split("\t") for line in lines]
@@ -264,4 +319,3 @@ class HyphaBridge:
 if __name__ == "__main__":
     import fire
     fire.Fire(HyphaBridge)
-

@@ -8,4 +8,4 @@ hypha==0.15.36
 uvicorn==0.15.0
 imjoy-rpc==0.5.47
 pyotritonclient==0.2.6
-netifaces==0.11.0
+psutil==5.9.8

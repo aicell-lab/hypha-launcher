@@ -1,0 +1,17 @@
+# run python3 -m hypha_launcher launch_hello_world
+# assert it return hello world from K8S
+
+name: Test K8s
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run K8S ...
+        run: |
+            ...
+

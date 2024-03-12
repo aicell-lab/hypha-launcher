@@ -107,3 +107,4 @@ ENV/
 
 tmp/
 .executor/
+.hypha_launcher/

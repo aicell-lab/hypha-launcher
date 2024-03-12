@@ -21,7 +21,7 @@ dependencies = [
     "uvicorn",
     "imjoy-rpc",
     "pyotritonclient",
-    "netifaces",
+    "psutil",
 ]
 
 [tool.setuptools]

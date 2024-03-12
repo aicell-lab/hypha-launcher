@@ -1,0 +1,17 @@
+# run python3 -m hypha_launcher launch_hello_world
+# assert it return hello world from docker
+
+name: Test docker
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run docker ...
+        run: |
+            docker run ghcr.io/bioimage-io/generic-hypha-app:c7b241c bash -c "python3 -m pip install hypha_launcer && python3 -m hypha_launcher launch_hello_world"
+
