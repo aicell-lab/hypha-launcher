@@ -111,11 +111,13 @@ class HyphaBridge:
     def __init__(
             self,
             server: T.Optional[T.Union[T.Dict, str]] = None,
+            service_id: str = "hypha-bridge",
             engine: T.Optional[Engine] = None,
             store_dir: str = ".hypha_launcher_store",
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             debug: bool = False,
             ):
+        self.service_id = service_id
         self.server = server
         self.engine = engine
         self.store_dir = Path(store_dir)
@@ -226,7 +228,7 @@ class HyphaBridge:
         await self.server.register_service(
             {
                 "name": "Hypha Bridge",
-                "id": "hypha-bridge",
+                "id": self.service_id,
                 "launch_worker": launch_worker,
                 "stop_worker": stop_worker,
                 "get_all_workers": get_all_workers,

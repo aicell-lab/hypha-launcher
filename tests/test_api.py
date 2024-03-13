@@ -18,6 +18,6 @@ async def test_launch_s3():
 async def test_launch_triton(hypha_server):
     server = await connect_to_server({"server_url": hypha_server})
     hypha_launcher = HyphaLauncher()
-    job = await hypha_launcher.launch_triton_server(server, hpc_type="local")
+    job = await hypha_launcher.launch_triton_worker(server, hpc_type="local")
     await asyncio.sleep(15)
     await job['stop']()

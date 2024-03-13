@@ -182,6 +182,54 @@ class HyphaLauncher:
         worker_dict['stop'] = partial(bridge.stop_worker, worker_dict['worker_id'])
         return worker_dict
 
+    async def launch_bridge(
+            self,
+            server,
+            service_id: str = "hypha-bridge",
+            worker_types: T.Optional[T.Dict] = None,
+            slurm_settings: T.Optional[T.Dict[str, str]] = None,
+        ):
+        """Launch a bridge."""
+        bridge = HyphaBridge(
+            server=server,
+            service_id=service_id,
+            engine=self.engine,
+            store_dir=str(self.store_dir),
+            slurm_settings=slurm_settings,
+            debug=self.debug,
+        )
+        await bridge.run(worker_types=worker_types)
+
+    async def launch_bridge_worker(
+            self,
+            server,
+            worker_type: str,
+            bridge_service_id: str = "hypha-bridge",
+            hpc_type: T.Optional[str] = None,
+        ):
+        """Launch a bridge worker."""
+        bridge = await server.get_service(bridge_service_id)
+        worker_dict = await bridge.launch_worker(worker_type, hpc_type)
+        worker_dict['stop'] = partial(bridge.stop_worker, worker_dict['worker_id'])
+        return worker_dict
+
+    async def launch_triton_worker(
+            self,
+            server,
+            bridge_service_id: str = "hypha-bridge",
+            hpc_type: T.Optional[str] = None,
+            **kwargs,
+        ):
+        """Launch a Triton worker."""
+        try:
+            await server.get_service(bridge_service_id)
+        except Exception as e:
+            logger.warning(f"Cannot find bridge service: {bridge_service_id}")
+            await self.launch_bridge(server, bridge_service_id, **kwargs)
+        return await self.launch_bridge_worker(
+            server, "triton", bridge_service_id, hpc_type
+        )
+
     async def launch_hello_world(self):
         """Detect in which environment, docker/k8s/apptainer"""
         # detect env
