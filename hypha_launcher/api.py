@@ -2,6 +2,7 @@ import os
 import typing as T
 from pathlib import Path
 from functools import partial
+import secrets
 
 from executor.engine import Engine
 from executor.engine.job.extend import SubprocessJob
@@ -98,25 +99,29 @@ class HyphaLauncher:
 
     async def launch_s3_server(
             self,
-            minio_root_user: str = "",
-            minio_root_password: str = ""):
+            minio_root_user: T.Optional[str] = None,
+            minio_root_password: T.Optional[str] = None):
         """Run a worker server, run in the login node of HPC. """
         engine = self.engine
         self.container_engine.pull_image(S3_IMAGE)
 
         data_dir = self.store_dir / "s3_data"
         data_dir.mkdir(exist_ok=True, parents=True)
+        if minio_root_user is None:
+            minio_root_user = "minio"
+        if minio_root_password is None:
+            minio_root_password = secrets.token_urlsafe(16)
 
         async def start_s3_server():
 
             port = PortManager.get_port()
             console_port = PortManager.get_port()
             cmd = self.container_engine.get_command(
-                'server /data --console-address ":9001" --address ":9000"',  # noqa
+                f'server /data --console-address ":{port}" --address ":{console_port}"',  # noqa
                 S3_IMAGE,
                 ports={
-                    port: 9000,
-                    console_port: 9001,
+                    port: port,
+                    console_port: console_port,
                 },
                 volumes={data_dir.as_posix(): "/data"},
             )
@@ -160,6 +165,7 @@ class HyphaLauncher:
     async def launch_triton_server(
             self,
             server,
+            hpc_type: T.Optional[str] = None,
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             ):
         """Launch a Triton server."""
@@ -172,7 +178,7 @@ class HyphaLauncher:
         )
         await bridge.run()
         bridge = await server.get_service("hypha-bridge")
-        worker_dict = await bridge.launch_worker('triton')
+        worker_dict = await bridge.launch_worker('triton', hpc_type)
         worker_dict['stop'] = partial(bridge.stop_worker, worker_dict['worker_id'])
         return worker_dict
 

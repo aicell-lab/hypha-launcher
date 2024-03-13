@@ -44,6 +44,9 @@ class TritonWorker(BridgeWorker):
         container_engine.pull_image(TRITON_IMAGE)
         host_port = PortManager.get_port()
         store_dir = self.store_dir
+        model_dir = store_dir / "models"
+        if not model_dir.exists():
+            model_dir.mkdir(parents=True)
         cmd = container_engine.get_command(
             f'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port={host_port}"',  # noqa
             TRITON_IMAGE,
@@ -150,16 +153,6 @@ class HyphaBridge:
         self._store_worker_types(worker_types)
         logger.info(f"Worker types: {worker_types}")
 
-        logger.info(f"Computational environment(worker type): {self.hpc_manager.hpc_type}")  # noqa
-        if self.hpc_manager.hpc_type == "slurm":
-            logger.info(f"Slurm settings: {self.slurm_settings}")
-            if self.slurm_settings is None:
-                logger.error("Slurm settings is not provided.")
-                raise ValueError("Slurm settings is not provided.")
-            assert (
-                "account" in self.slurm_settings
-            ), "account is required in slurm settings"  # noqa
-
         assert self.engine is not None, "Engine is not provided."
         engine = self.engine
         worker_count = 0  # only increase
@@ -182,9 +175,17 @@ class HyphaBridge:
             logger.info(f"Command: {cmd}")
             if hpc_type is None:
                 hpc_type = self.hpc_manager.hpc_type
+            logger.info(f"Computational environment(worker type): {hpc_type}")  # noqa
             if hpc_type == "slurm":
-                assert self.slurm_settings is not None
+                logger.info(f"Slurm settings: {self.slurm_settings}")
+                if self.slurm_settings is None:
+                    logger.error("Slurm settings is not provided.")
+                    raise ValueError("Slurm settings is not provided.")
+                assert (
+                    "account" in self.slurm_settings
+                ), "account is required in slurm settings"  # noqa
                 cmd = self.hpc_manager.get_slurm_command(cmd, **self.slurm_settings)  # noqa
+
             cmd_job = SubprocessJob(cmd, base_class=ProcessJob)
             nonlocal current_worker_id
             current_worker_id = worker_id
