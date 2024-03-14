@@ -20,9 +20,10 @@ def detect_hpc_type() -> str:
 
 
 class HPCManger:
-    def __init__(self):
-        self.hpc_type = detect_hpc_type()
-        self.logger = get_logger()
+    def __init__(self, hpc_type: T.Optional[str] = None):
+        if hpc_type is None:
+            hpc_type = detect_hpc_type()
+        self.hpc_type = hpc_type
 
     def get_command(self, cmd: str, **attrs) -> str:
         if self.hpc_type == "slurm":
@@ -33,6 +34,7 @@ class HPCManger:
             raise NotImplementedError(f"Unsupported HPC type: {self.hpc_type}")
 
     def get_slurm_command(
+            self,
             cmd: str,
             account: str,
             time: T.Optional[str] = None,

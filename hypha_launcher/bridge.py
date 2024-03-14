@@ -1,11 +1,12 @@
 import asyncio
 import typing as T
 from pathlib import Path
+from copy import copy
 
 from executor.engine import Engine
 from executor.engine.job.extend.subprocess import SubprocessJob
 from executor.engine.job.base import Job
-from executor.engine.job import ProcessJob
+from executor.engine.job import ProcessJob, ThreadJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
 from pyotritonclient import get_config, execute
@@ -110,18 +111,20 @@ class TritonWorker(BridgeWorker):
 class HyphaBridge:
     def __init__(
             self,
-            server: T.Optional[T.Union[T.Dict, str]] = None,
+            server: T.Optional[T.Dict] = None,
             service_id: str = "hypha-bridge",
             engine: T.Optional[Engine] = None,
             store_dir: str = ".hypha_launcher_store",
             slurm_settings: T.Optional[T.Dict[str, str]] = None,
             debug: bool = False,
+            upstream_mode: bool = False,
             ):
         self.service_id = service_id
         self.server = server
         self.engine = engine
         self.store_dir = Path(store_dir)
         self.debug = debug
+        self.upstream_mode = upstream_mode
 
         self.hpc_manager = HPCManger()
 
@@ -129,25 +132,20 @@ class HyphaBridge:
         self.container_engine = ContainerEngine(
             str(self.store_dir / "containers"))
 
-    @property
-    def server_port(self) -> int:
-        assert isinstance(self.server, dict)
-        public_url = self.server['config']["public_base_url"]
-        hypha_port = int(public_url.split(":")[-1])
-        return hypha_port
-
     async def run(
             self,
             worker_types: T.Optional[T.Dict[str, T.Type[BridgeWorker]]] = None,  # noqa
             ):
-        if isinstance(self.server, str):
-            logger.info(f"Connecting to hypha server: {self.server}")
-            self.server = await connect_to_server({"server_url": self.server})
-            assert isinstance(self.server, dict)
-            logger.info(f"Connected to hypha server: {self.server['config']['public_base_url']}")  # noqa
         assert self.server is not None, "Server is not provided."
-        self._record_hypha_server_port(self.server_port)
-        self._record_login_node_ips()
+        public_url = self.server['config']["public_base_url"]
+        if self.upstream_mode:
+            logger.info(f"Connecting to upstream hypha server: {public_url}")
+            self._record_upstream_server(public_url)
+        else:
+            hypha_port = int(public_url.split(":")[-1])
+            self._record_hypha_server_port(hypha_port)
+            self._record_login_node_ips()
+            self._record_upstream_server("")
 
         worker_types = worker_types or {
             "triton": TritonWorker,
@@ -242,9 +240,13 @@ class HyphaBridge:
             hypha_server_url: T.Optional[str] = None):
         """Run a worker server, run in the compute node of HPC. """
         if hypha_server_url is None:
-            hypha_server_url = self._find_connectable_hypha_address()
-            if hypha_server_url is None:
-                raise ValueError("Cannot connect to hypha server.")
+            upsteam_server = self._get_upstream_server()
+            if upsteam_server is not None:
+                hypha_server_url = upsteam_server
+            else:
+                hypha_server_url = self._find_connectable_hypha_address()
+                if hypha_server_url is None:
+                    raise ValueError("Cannot connect to hypha server.")
 
         worker_types = self._load_worker_types()
         worker = worker_types[worker_type](worker_id, self.store_dir)
@@ -257,7 +259,7 @@ class HyphaBridge:
         self.container_engine.pull_image(TRITON_IMAGE)
 
         async def start_run_worker():
-            triton_job = ProcessJob(
+            triton_job = ThreadJob(
                 worker.run,
                 args=(self.container_engine,)
             )
@@ -317,6 +319,16 @@ class HyphaBridge:
                 logger.info(f"Found connectable hypha server: {hypha_server_url}")  # noqa
                 break
         return hypha_server_url
+
+    def _record_upstream_server(self, server_url: str):
+        with open(self.store_dir / "upstream_server.txt", "w") as f:
+            f.write(server_url)
+        logger.info(f"Upstream server is recorded to {server_url}")
+
+    def _get_upstream_server(self) -> T.Union[str, None]:
+        with open(self.store_dir / "upstream_server.txt") as f:
+            server_url = f.read().strip()
+        return server_url or None
 
 
 if __name__ == "__main__":

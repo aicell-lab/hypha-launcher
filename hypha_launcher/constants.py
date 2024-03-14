@@ -3,7 +3,7 @@ S3_BASE_URL = "https://uk1s3.embassy.ebi.ac.uk/"
 S3_MODELS_URL = f"{S3_BASE_URL}/model-repository/"
 S3_CONDA_ENVS_URL = f"{S3_BASE_URL}/bioimage.io/environments"
 TRITON_IMAGE = "docker://nvcr.io/nvidia/tritonserver:23.03-py3"
-S3_IMAGE = "docker://minio/minio:RELEASE.2022-09-01T23-53-36Z.fips"
+S3_IMAGE = "docker://minio/minio:RELEASE.2023-10-24T04-42-36Z.hotfix.793d9ee53"
 
 DOCKER_REGISTRY_PREFIX = "docker://ghcr.io/bioimage-io"
 
