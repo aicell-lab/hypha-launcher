@@ -1,5 +1,5 @@
 
-S3_BASE_URL = "https://uk1s3.embassy.ebi.ac.uk/"
+S3_BASE_URL = "https://uk1s3.embassy.ebi.ac.uk"
 S3_MODELS_URL = f"{S3_BASE_URL}/model-repository/"
 S3_CONDA_ENVS_URL = f"{S3_BASE_URL}/bioimage.io/environments"
 TRITON_IMAGE = "docker://nvcr.io/nvidia/tritonserver:23.03-py3"

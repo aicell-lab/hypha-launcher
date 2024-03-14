@@ -11,13 +11,13 @@ from .log import get_logger
 logger = get_logger()
 
 
-def run_cmd(cmd: T.Union[str, T.List[str]], check: bool = True):
+def run_cmd(cmd: T.Union[str, T.List[str]], check: bool = True, **kwargs):
     if isinstance(cmd, list):
         logger.info(f"Running command: {' '.join(cmd)}")
-        subp.run(cmd, check=check)
+        subp.run(cmd, check=check, **kwargs)
     else:
         logger.info(f"Running command: {cmd}")
-        subp.run(cmd, shell=True, check=check)
+        subp.run(cmd, shell=True, check=check, **kwargs)
 
 
 def get_all_ips() -> T.List[T.Tuple[str, str]]:
