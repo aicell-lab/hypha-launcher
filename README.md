@@ -17,7 +17,12 @@
 
 ## Features
 
-+ CLI for downloading model from s3 and pulling docker image of triton server
++ CLI/API for:
+  - downloading model from s3 and pulling docker image of triton server
+  - launch s3 server
+  - launch triton server
+  - launch other services inside container
+  - ...
 + Support different container engines
   - Docker
   - Apptainer
@@ -31,54 +36,37 @@
 pip install hypha-launcher
 ```
 
-## Usage
+## CLI Usage
 
 ```bash
-$ hypha-launcher
-NAME
-    hypha-launcher
-
-SYNOPSIS
-    hypha-launcher - GROUP | COMMAND | VALUE
-
-GROUPS
-    GROUP is one of the following:
-
-     container_engine
-       Container engine abstraction. Provides a common interface to container engines, such as docker, apptainer, podman, etc.
-
-COMMANDS
-    COMMAND is one of the following:
-
-     download_models_from_s3
-       Download models from S3
-
-     pull_image
-
-     run_launcher_server
-       Start a launcher server, run in the login node of HPC.
-
-     run_worker
-       Run a worker server, run in the compute node of HPC.
-
-VALUES
-    VALUE is one of the following:
-
-     debug
-
-     store_dir
+$ hypha-launcher --help
 ```
 
 ### Download model from s3
 
 ```bash
-$ hypha-launcher --store-dir="./triton_store" - download_models_from_s3 bioengine-model-runner.* --n_parallel=5
+$ python -m hypha-launcher - download_models_from_s3 bioengine-model-runner.* --n_parallel=5
 ```
 
 ### Pull docker image of triton server
 
 ```bash
-$ hypha-launcher --store-dir="./triton_store" - pull_image
+$ python -m hypha-launcher - pull_image
+```
+
+### Launch a Triton server
+
+Launch a triton worker and register it to a upstream hypha server(https://ai.imjoy.io) as service.
+
+```bash
+$ python -m hypha-launcher - launch_triton https://ai.imjoy.io --upstream-mode=True --worker-service-id=my-triton-server
+```
+
+Launch triton worker on slurm cluster.
+
+```bash
+# Please replace the slurm settings with your own settings
+$ python -m hypha_launcher launch_triton https://ai.imjoy.io --upstream-mode=True --slurm-settings='{"account": "Your-Slurm-Account", "time": "03:00:00", "gpus_per_node": "A100:1"}' --worker-service-id=my-hpc-triton-server
 ```
 
 ## TODO
@@ -89,6 +77,8 @@ $ hypha-launcher --store-dir="./triton_store" - pull_image
 * [x] Register service on hypha
 * [x] Conmmunicate with triton server
 * [x] Test on HPC
+* [ ] Support run on local machine without GPU
+* [ ] Support launch containers inside a container (For support run inside the podman-desktop)
 * [ ] Job management(Auto stop and restart)
 * [ ] Load balancing
 * [ ] Documentation

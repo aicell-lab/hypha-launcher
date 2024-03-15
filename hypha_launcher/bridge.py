@@ -2,6 +2,7 @@ import asyncio
 import typing as T
 from pathlib import Path
 from copy import copy
+import os
 
 from executor.engine import Engine
 from executor.engine.job.extend.subprocess import SubprocessJob
@@ -55,7 +56,10 @@ class TritonWorker(BridgeWorker):
             volumes={str(store_dir / "models"): "/models"},
         )
         self.host_port = host_port
-        run_cmd(cmd, check=True)
+        triton_server_url = f"127.0.0.1:{host_port}"
+        env = copy(os.environ)
+        env["TRITON_SERVER_URL"] = triton_server_url
+        run_cmd(cmd, check=True, env=env)
 
     async def register_service(self, server):
         async def get_triton_config(model_name: str, verbose: bool = False):  # noqa

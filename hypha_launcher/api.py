@@ -83,7 +83,7 @@ class HyphaLauncher:
         )
         xml_content = download_content(s3_base_url)
         items = parse_s3_xml(xml_content, pattern)
-        urls = [s3_base_url + item for item in items]
+        urls = [s3_base_url + item for item in items if not item.endswith("/")]
         await download_files(
             urls, dest_dir, n_parallel=n_parallel, base_url=s3_base_url
         )
@@ -231,11 +231,12 @@ class HyphaLauncher:
             worker_type: str,
             bridge_service_id: str = "hypha-bridge",
             hpc_type: T.Optional[str] = None,
+            worker_service_id: T.Optional[str] = None,
         ):
         """Launch a bridge worker."""
         server = await self._get_server(server)
         bridge = await server.get_service(bridge_service_id)
-        worker_dict = await bridge.launch_worker(worker_type, hpc_type)
+        worker_dict = await bridge.launch_worker(worker_type, hpc_type, worker_service_id)
         worker_dict['stop'] = partial(bridge.stop_worker, worker_dict['worker_id'])
         return worker_dict
 
@@ -244,6 +245,7 @@ class HyphaLauncher:
             server,
             bridge_service_id: str = "hypha-bridge",
             hpc_type: T.Optional[str] = None,
+            worker_service_id: T.Optional[str] = None,
             **kwargs,
         ):
         """Launch a Triton worker."""
@@ -254,7 +256,8 @@ class HyphaLauncher:
             logger.warning(f"Cannot find bridge service: {bridge_service_id}")
             await self.launch_bridge(server, bridge_service_id, **kwargs)
         return await self.launch_bridge_worker(
-            server, "triton", bridge_service_id, hpc_type
+            server, "triton", bridge_service_id, hpc_type,
+            worker_service_id,
         )
 
     async def launch_hello_world(self):
