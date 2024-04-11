@@ -1,6 +1,5 @@
 import asyncio
 from hypha_launcher.api import HyphaLauncher
-from imjoy_rpc.hypha import connect_to_server
 
 import pytest
 
@@ -15,10 +14,9 @@ async def test_launch_s3():
 
 
 @pytest.mark.asyncio
-async def test_launch_triton(hypha_server):
-    server = await connect_to_server({"server_url": hypha_server})
+async def test_launch_triton():
     hypha_launcher = HyphaLauncher()
-    job = await hypha_launcher.launch_triton(server, hpc_type="local")
+    job = await hypha_launcher.launch_triton_server()
     await asyncio.sleep(15)
     await job['stop']()
 

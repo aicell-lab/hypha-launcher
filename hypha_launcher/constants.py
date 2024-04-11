@@ -35,3 +35,39 @@ loop = asyncio.get_event_loop()
 loop.create_task(main)
 loop.run_forever()
 """
+
+
+REPORT_ADDRESS_SCRIPT = """
+import json
+import http.client
+from executor.engine.utils import PortManager
+
+http_port = PortManager.get_port()
+task_id = "{task_uuid}"
+post_data = {{"port": http_port, "uuid": task_id}}
+post_data_json = json.dumps(post_data)
+for ip in {host_ips}:
+    try:
+        conn = http.client.HTTPConnection(ip, {ip_record_server_port})
+        conn.request("POST", "/", post_data_json, {{"Content-Type": "application/json"}})
+        response = conn.getresponse()
+        if response.status == 200:
+            break
+    except Exception as e:
+        print("Failed to record IP:", e)
+else:
+    raise ValueError("Failed to record IP")
+
+"""
+
+LAUNCH_TRITON_SCRIPT = REPORT_ADDRESS_SCRIPT + f"""
+from cmd2func.runner import ProcessRunner
+from hypha_launcher.utils.container import ContainerEngine
+
+container_engine_kwargs = {{container_engine_kwargs}}
+container_engine = ContainerEngine(**container_engine_kwargs)
+
+triton_cmd = 'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port=' + http_port + '"'
+cmd = container_engine.get_command(triton_cmd, "{TRITON_IMAGE}")
+runner = ProcessRunner(triton_cmd)
+"""

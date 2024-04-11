@@ -46,7 +46,7 @@ class ContainerEngine:
     @staticmethod
     def process_image_name_for_docker(image_name: str):
         if image_name.startswith("docker://"):
-            return image_name[len("docker://") :]
+            return image_name[len("docker://"):]
         return image_name
 
     @staticmethod
@@ -93,10 +93,11 @@ class ContainerEngine:
         # Initialize volume and port mappings as empty strings
         volume_mapping = ""
         port_mapping = ""
+        if volumes is None:
+            volumes = {}
         # If volumes are provided, construct volume mapping options
-        if volumes:
-            for host_path, container_path in volumes.items():
-                volume_mapping += f"-v {host_path}:{container_path} "
+        for host_path, container_path in volumes.items():
+            volume_mapping += f"-v {host_path}:{container_path} "
         # If ports are provided, construct port mapping options
         if ports:
             for host_port, container_port in ports.items():
