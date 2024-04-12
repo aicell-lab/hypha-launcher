@@ -3,10 +3,11 @@ import typing as T
 from pathlib import Path
 import secrets
 import uuid
+import asyncio
 
 from executor.engine import Engine
-from executor.engine.job.extend import SubprocessJob
-from executor.engine.job import Job, ProcessJob, ThreadJob
+from executor.engine.job.extend import SubprocessJob, WebappJob
+from executor.engine.job import Job, ProcessJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
 
@@ -52,7 +53,8 @@ class HyphaLauncher:
             executor_engine_kwargs = {}
         self.engine = Engine(**executor_engine_kwargs)
         self._task_uuid_to_job: T.Dict[str, Job] = {}
-        self._ip_record_server_port: T.Optional[int] = None
+        self._ip_record_server_job: T.Optional[Job] = None
+        self._ip_record_flie = self.store_dir / "tmp" / "record_ip.txt"
 
     def get_free_port(self) -> int:
         return PortManager.get_port()
@@ -212,9 +214,13 @@ class HyphaLauncher:
             server = await connect_to_server({"server_url": server})
         return server
 
-    async def launch_ip_record_server(self, port=8080):
-        def run_server():
+    async def launch_ip_record_server(self):
+        self._ip_record_flie.parent.mkdir(exist_ok=True, parents=True)
+        record_file = self._ip_record_flie.as_posix()
+
+        def run_server(ip, port: int):
             from aiohttp import web
+            uuid_to_address = {}
 
             async def handle(request):
                 forwarded_for = request.headers.get('X-Forwarded-For')
@@ -229,35 +235,41 @@ class HyphaLauncher:
 
                 print(f"Client IP: {client_ip}")
                 data = await request.json()
-                task_port = data.get("port", 0)
+                task_port = int(data.get("port", 0))
                 task_uuid = data.get("uuid", "")
-                job = self._task_uuid_to_job.get(task_uuid)
-                if job is not None:
-                    job.address = (client_ip, task_port)
+                uuid_to_address[task_uuid] = (client_ip, task_port)
+                with open(record_file, "w") as f:
+                    for _uuid, (_ip, _port) in uuid_to_address.items():
+                        f.write(f"{_uuid} {_ip} {_port}\n")
                 return web.Response(text=f"Hello, your IP is {client_ip}")
 
             app = web.Application()
             app.router.add_post('/', handle)
-            web.run_app(app, port=port)
+            web.run_app(app, host=ip, port=port)
 
-        job = ThreadJob(run_server)
-        job_dict = self.launch_job(job)
-        job_dict["port"] = port
-        self._ip_record_server_port = port
+        job = WebappJob(run_server, ip="0.0.0.0", base_class=ProcessJob)
+        self._ip_record_server_job = job
+        job_dict = await self.launch_job(job)
+        job_dict["port"] = job.port
         await job.wait_until_status("running")
         return job_dict
 
     async def launch_triton_server(
             self,
+            models_dir: T.Optional[str] = None,
             **kwargs):
         """Launch a Triton worker."""
         self.container_engine.pull_image(TRITON_IMAGE)
         task_uuid = str(uuid.uuid4())
         host_ips = [v[1] for v in get_all_ips()]
+        if (self._ip_record_server_job is None) or (self._ip_record_server_job.status != "running"):
+            await self.launch_ip_record_server()
+        if models_dir is None:
+            models_dir = (self.store_dir / "models").as_posix()
         launch_script = LAUNCH_TRITON_SCRIPT.format(
             task_uuid=task_uuid,
             host_ips=repr(host_ips),
-            ip_record_server_port=repr(self._ip_record_server_port),
+            ip_record_server_port=repr(self._ip_record_server_job.port),  # type: ignore
             container_engine_kwargs=repr(self._container_engine_kwargs),
         )
         script_dir = self.store_dir / "tmp"
@@ -265,7 +277,7 @@ class HyphaLauncher:
         script_path = script_dir / f"launch_triton_{task_uuid}.py"
         with open(script_path, "w") as f:
             f.write(launch_script)
-        run_cmd = f"python {script_path}"
+        run_cmd = f"python {script_path.as_posix()}"
         cmd = self.hpc_manager.get_command(run_cmd, **kwargs)
         job = SubprocessJob(cmd, base_class=ProcessJob)
         job_dict = {
@@ -274,6 +286,17 @@ class HyphaLauncher:
         }
         await self.engine.submit_async(job)
         await job.wait_until(lambda j: j.status in ("running", "failed"))
+        address_found = False
+        while not address_found:  # wait for the address to be recorded
+            with open(self._ip_record_flie, "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    _uuid, _ip, _port = line.strip().split(" ")
+                    if _uuid == task_uuid:
+                        job_dict["address"] = f"{_ip}:{_port}"
+                        address_found = True
+                        break
+            await asyncio.sleep(1)
         if job.status == "failed":
             raise ValueError("Failed to launch Triton server")
         self._task_uuid_to_job[task_uuid] = job

@@ -1,3 +1,4 @@
+import os
 import typing as T
 from .log import get_logger
 from .misc import run_cmd
@@ -36,11 +37,22 @@ class HPCManger:
     def get_slurm_command(
             self,
             cmd: str,
-            account: str,
+            account: T.Optional[str] = None,
             time: T.Optional[str] = None,
             gpus_per_node: T.Optional[str] = None,
             additonal_options: T.Optional[str] = None,
             ) -> str:
+        if account is None:
+            account = os.environ.get("SLURM_ACCOUNT")
+            if account is None:
+                raise ValueError("SLURM_ACCOUNT is not set.")
+        if time is None:
+            time = os.environ.get("SLURM_TIME")
+        if gpus_per_node is None:
+            gpus_per_node = os.environ.get("SLURM_GPUS_PER_NODE")
+        if additonal_options is None:
+            additonal_options = os.environ.get("SLURM_ADDITIONAL_OPTIONS")
+
         options_str = f"--account={account} "
         if time is not None:
             options_str += f"--time={time} "

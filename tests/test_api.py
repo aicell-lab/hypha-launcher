@@ -16,9 +16,12 @@ async def test_launch_s3():
 @pytest.mark.asyncio
 async def test_launch_triton():
     hypha_launcher = HyphaLauncher()
+    ip_job = await hypha_launcher.launch_ip_record_server()
     job = await hypha_launcher.launch_triton_server()
+    print(job['address'])
     await asyncio.sleep(15)
     await job['stop']()
+    await ip_job['stop']()
 
 
 @pytest.mark.asyncio

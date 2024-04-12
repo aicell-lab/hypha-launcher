@@ -61,13 +61,14 @@ else:
 """
 
 LAUNCH_TRITON_SCRIPT = REPORT_ADDRESS_SCRIPT + f"""
-from cmd2func.runner import ProcessRunner
+import os
 from hypha_launcher.utils.container import ContainerEngine
 
 container_engine_kwargs = {{container_engine_kwargs}}
 container_engine = ContainerEngine(**container_engine_kwargs)
 
-triton_cmd = 'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port=' + http_port + '"'
+triton_cmd = 'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port=' + str(http_port) + '"'
 cmd = container_engine.get_command(triton_cmd, "{TRITON_IMAGE}")
-runner = ProcessRunner(triton_cmd)
+print(cmd)
+os.system(cmd)
 """
