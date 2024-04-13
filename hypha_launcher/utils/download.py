@@ -96,12 +96,14 @@ def parse_s3_xml(content: str, key_pattern: str) -> list[str]:
     contents_elements = root.findall("ns:Contents", ns)
 
     # Extract the 'Key' element text if it matches the pattern
-    matching_keys = [
-        elem.find("ns:Key", ns).text
-        for elem in contents_elements
-        if pattern.match(elem.find("ns:Key", ns).text)
-    ]
-
+    matching_keys = []
+    for elem in contents_elements:
+        key = elem.find("ns:Key", ns)
+        if key is None:
+            continue
+        key_text = key.text
+        if key_text and pattern.match(key_text):
+            matching_keys.append(key_text)
     return matching_keys
 
 

@@ -266,11 +266,13 @@ class HyphaLauncher:
             await self.launch_ip_record_server()
         if models_dir is None:
             models_dir = (self.store_dir / "models").as_posix()
+        Path(models_dir).mkdir(exist_ok=True, parents=True)
         launch_script = LAUNCH_TRITON_SCRIPT.format(
             task_uuid=task_uuid,
             host_ips=repr(host_ips),
             ip_record_server_port=repr(self._ip_record_server_job.port),  # type: ignore
             container_engine_kwargs=repr(self._container_engine_kwargs),
+            model_repository=models_dir,
         )
         script_dir = self.store_dir / "tmp"
         script_dir.mkdir(exist_ok=True)

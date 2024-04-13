@@ -67,8 +67,14 @@ from hypha_launcher.utils.container import ContainerEngine
 container_engine_kwargs = {{container_engine_kwargs}}
 container_engine = ContainerEngine(**container_engine_kwargs)
 
+models_dir = "{{model_repository}}"
+volumes = dict([(models_dir, "/models")])
+
 triton_cmd = 'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port=' + str(http_port) + '"'
-cmd = container_engine.get_command(triton_cmd, "{TRITON_IMAGE}")
+cmd = container_engine.get_command(
+    triton_cmd, "{TRITON_IMAGE}",
+    volumes=volumes,
+)
 print(cmd)
 os.system(cmd)
 """
