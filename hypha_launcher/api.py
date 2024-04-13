@@ -10,6 +10,7 @@ from executor.engine.job.extend import SubprocessJob, WebappJob
 from executor.engine.job import Job, ProcessJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
+from pyotritonclient import get_config, execute
 
 from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
@@ -91,8 +92,19 @@ class HyphaLauncher:
             f" to {dest_dir}"
         )
         xml_content = download_content(s3_base_url)
-        items = parse_s3_xml(xml_content, pattern)
-        urls = [s3_base_url + item for item in items if not item.endswith("/")]
+        ori_items = parse_s3_xml(xml_content, pattern)
+        # filter out existing files
+        urls = []
+        for item in ori_items:
+            target_path = Path(dest_dir) / item["key"]
+            expected_size = item["size"]
+            if target_path.exists() and (target_path.stat().st_size == expected_size):
+                logger.info(f"File exists: {target_path}")
+                continue
+            if item["key"].endswith("/"):
+                continue
+            urls.append(f"{s3_base_url}{item['key']}")
+        logger.info(f"Founds {len(urls)} files to download.")
         await download_files(
             urls, dest_dir, n_parallel=n_parallel, base_url=s3_base_url
         )
@@ -303,6 +315,69 @@ class HyphaLauncher:
             raise ValueError("Failed to launch Triton server")
         self._task_uuid_to_job[task_uuid] = job
         return job_dict
+
+    async def launch_bioimageio_backend(
+            self,
+            models_dir: T.Optional[str] = None,
+            hypha_server_url: str = "https://ai.imjoy.io/",
+            service_name: str = "triton",
+            service_id: T.Optional[str] = None,
+            service_config: T.Optional[dict] = None,
+            ):
+        if models_dir is None:
+            models_dir = (self.store_dir / "models").as_posix()
+        await self.download_models_from_s3(".*", models_dir)
+        await self.launch_ip_record_server()
+        triton_job = await self.launch_triton_server(models_dir)
+        triton_address = triton_job['address']
+
+        async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
+            try:
+                res = await get_config(
+                    triton_address,
+                    model_name=model_name,
+                    verbose=verbose,
+                )
+                return res
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                return {"error": str(e)}
+
+        async def execute_triton(
+                inputs: T.Union[T.Any, None] = None,
+                model_name: T.Union[str, None] = None,
+                cache_config: bool = True,
+                **kwargs):
+            try:
+                res = await execute(
+                    inputs=inputs,
+                    server_url=triton_address,
+                    model_name=model_name,
+                    cache_config=cache_config,
+                    **kwargs,
+                )
+                return res
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                return {"error": str(e)}
+
+        server = await self._get_hypha_server(hypha_server_url)
+        if service_id is None:
+            service_id = f"{service_name}-{secrets.token_urlsafe(8)}"
+        logger.info(f"Registering service: {service_name} with id: {service_id}")
+        if service_config is None:
+            service_config = {"visibility": "public"}
+        await server.register_service(
+            {
+                "name": service_name,
+                "id": service_id,
+                "config": service_config,
+                "get_config": get_triton_config,
+                "execute": execute_triton,
+            }
+        )
+
+        await self.engine.wait_async()
 
     async def launch_hello_world(self):
         """Detect in which environment, docker/k8s/apptainer"""
