@@ -66,6 +66,7 @@ from hypha_launcher.utils.container import ContainerEngine
 
 container_engine_kwargs = {{container_engine_kwargs}}
 container_engine = ContainerEngine(**container_engine_kwargs)
+container_engine.pull_image("{TRITON_IMAGE}")
 
 models_dir = "{{model_repository}}"
 volumes = dict([(models_dir, "/models")])

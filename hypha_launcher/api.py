@@ -302,14 +302,15 @@ class HyphaLauncher:
         await job.wait_until(lambda j: j.status in ("running", "failed"))
         address_found = False
         while not address_found:  # wait for the address to be recorded
-            with open(self._ip_record_flie, "r") as f:
-                lines = f.readlines()
-                for line in lines:
-                    _uuid, _ip, _port = line.strip().split(" ")
-                    if _uuid == task_uuid:
-                        job_dict["address"] = f"{_ip}:{_port}"
-                        address_found = True
-                        break
+            if self._ip_record_flie.exists():
+                with open(self._ip_record_flie, "r") as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        _uuid, _ip, _port = line.strip().split(" ")
+                        if _uuid == task_uuid:
+                            job_dict["address"] = f"{_ip}:{_port}"
+                            address_found = True
+                            break
             await asyncio.sleep(1)
         if job.status == "failed":
             raise ValueError("Failed to launch Triton server")
