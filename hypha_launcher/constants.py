@@ -71,11 +71,13 @@ container_engine.pull_image("{TRITON_IMAGE}")
 models_dir = "{{model_repository}}"
 volumes = dict([(models_dir, "/models")])
 ports = dict([(http_port, 8000)])
+envs = dict([("TRITON_SERVER_URL", f"127.0.0.1:" + str(http_port))])
 
 triton_cmd = 'bash -c "tritonserver --model-repository=/models --log-verbose=3 --log-info=1 --log-warning=1 --log-error=1 --model-control-mode=poll --exit-on-error=false --repository-poll-secs=10 --allow-grpc=False --http-port=' + str(http_port) + '"'
 cmd = container_engine.get_command(
     triton_cmd, "{TRITON_IMAGE}",
     volumes=volumes,
+    envs=envs,
 )
 print(cmd)
 os.system(cmd)
