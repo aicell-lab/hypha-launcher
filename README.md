@@ -21,7 +21,6 @@
   - downloading model from s3 and pulling docker image of triton server
   - launch s3 server
   - launch triton server
-  - launch other services inside container
   - ...
 + Support different container engines
   - Docker
@@ -42,6 +41,24 @@ pip install hypha-launcher
 $ hypha-launcher --help
 ```
 
+### Launch the bioimage.io backend
+
+Download all models from s3 and launch triton server.
+
+```bash
+$ python -m hypha_launcher launch_bioimageio_backend --service-id my-triton
+```
+
+Launch on slurm cluster.
+
+```bash
+# Please replace the slurm settings with your own settings
+$ export SLURM_ACCOUNT=Your-Slurm-Account
+$ export SLURM_TIME=03:00:00
+$ export SLURM_GPUS_PER_NODE=A100:1
+$ python -m hypha_launcher launch_bioimageio_backend --service-id my-triton
+```
+
 ### Download model from s3
 
 ```bash
@@ -52,21 +69,6 @@ $ python -m hypha-launcher - download_models_from_s3 bioengine-model-runner.* --
 
 ```bash
 $ python -m hypha-launcher - pull_image
-```
-
-### Launch a Triton server
-
-Launch a triton worker and register it to a upstream hypha server(https://ai.imjoy.io) as service.
-
-```bash
-$ python -m hypha-launcher - launch_triton https://ai.imjoy.io --upstream-mode=True --worker-service-id=my-triton-server
-```
-
-Launch triton worker on slurm cluster.
-
-```bash
-# Please replace the slurm settings with your own settings
-$ python -m hypha_launcher launch_triton https://ai.imjoy.io --upstream-mode=True --slurm-settings='{"account": "Your-Slurm-Account", "time": "03:00:00", "gpus_per_node": "A100:1"}' --worker-service-id=my-hpc-triton-server
 ```
 
 ## TODO

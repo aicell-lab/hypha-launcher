@@ -1,21 +1,26 @@
 import os
 import typing as T
 from pathlib import Path
-from functools import partial
 import secrets
+import uuid
+import asyncio
 
 from executor.engine import Engine
-from executor.engine.job.extend import SubprocessJob
+from executor.engine.job.extend import SubprocessJob, WebappJob
 from executor.engine.job import Job, ProcessJob
 from executor.engine.utils import PortManager
 from imjoy_rpc.hypha import connect_to_server
+from pyotritonclient import get_config, execute
 
 from .utils.download import download_files, parse_s3_xml, download_content
 from .utils.log import get_logger
 from .utils.container import ContainerEngine
 from .utils.hpc import HPCManger
-from .constants import S3_MODELS_URL, S3_CONDA_ENVS_URL, TRITON_IMAGE, S3_IMAGE
-from .bridge import HyphaBridge
+from .utils.misc import get_all_ips
+from .constants import (
+    S3_MODELS_URL, S3_CONDA_ENVS_URL, LAUNCH_TRITON_SCRIPT,
+    S3_IMAGE, TRITON_IMAGE
+)
 
 
 logger = get_logger()
@@ -30,6 +35,7 @@ class HyphaLauncher:
             hpc_manager_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             executor_engine_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             ):
+        store_dir = os.environ.get("HYPHA_LAUNCHER_STORE_DIR", store_dir)
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
@@ -39,6 +45,7 @@ class HyphaLauncher:
             container_engine_kwargs = {
                 "store_dir": str(self.store_dir / "containers"),
             }
+        self._container_engine_kwargs = container_engine_kwargs
         self.container_engine = ContainerEngine(**container_engine_kwargs)
         if hpc_manager_kwargs is None:
             hpc_manager_kwargs = {}
@@ -46,6 +53,9 @@ class HyphaLauncher:
         if executor_engine_kwargs is None:
             executor_engine_kwargs = {}
         self.engine = Engine(**executor_engine_kwargs)
+        self._task_uuid_to_job: T.Dict[str, Job] = {}
+        self._ip_record_server_job: T.Optional[Job] = None
+        self._ip_record_flie = self.store_dir / "tmp" / "record_ip.txt"
 
     def get_free_port(self) -> int:
         return PortManager.get_port()
@@ -82,8 +92,19 @@ class HyphaLauncher:
             f" to {dest_dir}"
         )
         xml_content = download_content(s3_base_url)
-        items = parse_s3_xml(xml_content, pattern)
-        urls = [s3_base_url + item for item in items if not item.endswith("/")]
+        ori_items = parse_s3_xml(xml_content, pattern)
+        # filter out existing files
+        urls = []
+        for item in ori_items:
+            target_path = Path(dest_dir) / item["key"]
+            expected_size = item["size"]
+            if target_path.exists() and (target_path.stat().st_size == expected_size):
+                logger.info(f"File exists: {target_path}")
+                continue
+            if item["key"].endswith("/"):
+                continue
+            urls.append(f"{s3_base_url}{item['key']}")
+        logger.info(f"Founds {len(urls)} files to download.")
         await download_files(
             urls, dest_dir, n_parallel=n_parallel, base_url=s3_base_url
         )
@@ -112,7 +133,7 @@ class HyphaLauncher:
             pattern, dest_dir, n_parallel, s3_base_url
         )
 
-    def pull_image(self, image_name: str = TRITON_IMAGE):
+    def pull_image(self, image_name: str):
         self.container_engine.pull_image(image_name)
 
     async def launch_s3_server(
@@ -174,7 +195,7 @@ class HyphaLauncher:
             self,
             cmd: str,
             image_name: T.Optional[str] = None,
-            container_kwargs: T.Optional[T.Dict[str, str]] = None,
+            container_kwargs: T.Optional[T.Dict] = None,
             hpc_kwargs: T.Optional[T.Dict[str, str]] = None,
             cmd_kwargs: T.Optional[T.Dict[str, str]] = None,
             ):
@@ -200,65 +221,164 @@ class HyphaLauncher:
         )
         return config
 
-    async def launch_bridge(
-            self,
-            server,
-            service_id: str = "hypha-bridge",
-            worker_types: T.Optional[T.Dict] = None,
-            slurm_settings: T.Optional[T.Dict[str, str]] = None,
-            upstream_mode: bool = False,
-        ):
-        """Launch a bridge."""
-        bridge = HyphaBridge(
-            server=server,
-            service_id=service_id,
-            engine=self.engine,
-            store_dir=str(self.store_dir),
-            slurm_settings=slurm_settings,
-            debug=self.debug,
-            upstream_mode=upstream_mode,
-        )
-        await bridge.run(worker_types=worker_types)
-
-    async def _get_server(self, server):
+    async def _get_hypha_server(self, server):
         if isinstance(server, str):
             server = await connect_to_server({"server_url": server})
         return server
 
-    async def launch_bridge_worker(
-            self,
-            server,
-            worker_type: str,
-            bridge_service_id: str = "hypha-bridge",
-            hpc_type: T.Optional[str] = None,
-            worker_service_id: T.Optional[str] = None,
-        ):
-        """Launch a bridge worker."""
-        server = await self._get_server(server)
-        bridge = await server.get_service(bridge_service_id)
-        worker_dict = await bridge.launch_worker(worker_type, hpc_type, worker_service_id)
-        worker_dict['stop'] = partial(bridge.stop_worker, worker_dict['worker_id'])
-        return worker_dict
+    async def launch_ip_record_server(self):
+        self._ip_record_flie.parent.mkdir(exist_ok=True, parents=True)
+        record_file = self._ip_record_flie.as_posix()
 
-    async def launch_triton(
+        def run_server(ip, port: int):
+            from aiohttp import web
+            uuid_to_address = {}
+
+            async def handle(request):
+                forwarded_for = request.headers.get('X-Forwarded-For')
+                if forwarded_for:
+                    client_ip = forwarded_for.split(',')[0].strip()
+                else:
+                    peername = request.transport.get_extra_info('peername')
+                    if peername is not None:
+                        client_ip = peername[0]
+                    else:
+                        client_ip = 'Unknown'
+
+                print(f"Client IP: {client_ip}")
+                data = await request.json()
+                task_port = int(data.get("port", 0))
+                task_uuid = data.get("uuid", "")
+                uuid_to_address[task_uuid] = (client_ip, task_port)
+                with open(record_file, "w") as f:
+                    for _uuid, (_ip, _port) in uuid_to_address.items():
+                        f.write(f"{_uuid} {_ip} {_port}\n")
+                return web.Response(text=f"Hello, your IP is {client_ip}")
+
+            app = web.Application()
+            app.router.add_post('/', handle)
+            web.run_app(app, host=ip, port=port)
+
+        job = WebappJob(run_server, ip="0.0.0.0", base_class=ProcessJob)
+        self._ip_record_server_job = job
+        job_dict = await self.launch_job(job)
+        job_dict["port"] = job.port
+        await job.wait_until_status("running")
+        return job_dict
+
+    async def launch_triton_server(
             self,
-            server,
-            bridge_service_id: str = "hypha-bridge",
-            hpc_type: T.Optional[str] = None,
-            worker_service_id: T.Optional[str] = None,
-            **kwargs,
-        ):
+            models_dir: T.Optional[str] = None,
+            **kwargs):
         """Launch a Triton worker."""
-        server = await self._get_server(server)
-        try:
-            await server.get_service(bridge_service_id)
-        except Exception as e:
-            logger.warning(f"Cannot find bridge service: {bridge_service_id}")
-            await self.launch_bridge(server, bridge_service_id, **kwargs)
-        return await self.launch_bridge_worker(
-            server, "triton", bridge_service_id, hpc_type,
-            worker_service_id,
+        self.container_engine.pull_image(TRITON_IMAGE)
+        task_uuid = str(uuid.uuid4())
+        host_ips = [v[1] for v in get_all_ips()]
+        if (self._ip_record_server_job is None) or (self._ip_record_server_job.status != "running"):
+            await self.launch_ip_record_server()
+        if models_dir is None:
+            models_dir = (self.store_dir / "models").as_posix()
+        Path(models_dir).mkdir(exist_ok=True, parents=True)
+        launch_script = LAUNCH_TRITON_SCRIPT.format(
+            task_uuid=task_uuid,
+            host_ips=repr(host_ips),
+            ip_record_server_port=repr(self._ip_record_server_job.port),  # type: ignore
+            container_engine_kwargs=repr(self._container_engine_kwargs),
+            model_repository=models_dir,
         )
+        script_dir = self.store_dir / "tmp"
+        script_dir.mkdir(exist_ok=True)
+        script_path = script_dir / f"launch_triton_{task_uuid}.py"
+        with open(script_path, "w") as f:
+            f.write(launch_script)
+        run_cmd = f"python {script_path.as_posix()}"
+        cmd = self.hpc_manager.get_command(run_cmd, **kwargs)
+        job = SubprocessJob(cmd, base_class=ProcessJob)
+        job_dict = {
+            "job_id": job.id,
+            "stop": job.cancel,
+        }
+        await self.engine.submit_async(job)
+        await job.wait_until(lambda j: j.status in ("running", "failed"))
+        address_found = False
+        while not address_found:  # wait for the address to be recorded
+            if self._ip_record_flie.exists():
+                with open(self._ip_record_flie, "r") as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        _uuid, _ip, _port = line.strip().split(" ")
+                        if _uuid == task_uuid:
+                            job_dict["address"] = f"{_ip}:{_port}"
+                            address_found = True
+                            break
+            await asyncio.sleep(1)
+        if job.status == "failed":
+            raise ValueError("Failed to launch Triton server")
+        self._task_uuid_to_job[task_uuid] = job
+        return job_dict
+
+    async def launch_bioimageio_backend(
+            self,
+            models_dir: T.Optional[str] = None,
+            hypha_server_url: str = "https://ai.imjoy.io/",
+            service_name: str = "triton",
+            service_id: T.Optional[str] = None,
+            service_config: T.Optional[dict] = None,
+            ):
+        if models_dir is None:
+            models_dir = (self.store_dir / "models").as_posix()
+        await self.download_models_from_s3(".*", models_dir)
+        await self.launch_ip_record_server()
+        triton_job = await self.launch_triton_server(models_dir)
+        triton_address = triton_job['address']
+
+        async def get_triton_config(model_name: str, verbose: bool = False):  # noqa
+            try:
+                res = await get_config(
+                    triton_address,
+                    model_name=model_name,
+                    verbose=verbose,
+                )
+                return res
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                return {"error": str(e)}
+
+        async def execute_triton(
+                inputs: T.Union[T.Any, None] = None,
+                model_name: T.Union[str, None] = None,
+                cache_config: bool = True,
+                **kwargs):
+            try:
+                res = await execute(
+                    inputs=inputs,
+                    server_url=triton_address,
+                    model_name=model_name,
+                    cache_config=cache_config,
+                    **kwargs,
+                )
+                return res
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                return {"error": str(e)}
+
+        server = await self._get_hypha_server(hypha_server_url)
+        if service_id is None:
+            service_id = f"{service_name}-{secrets.token_urlsafe(8)}"
+        logger.info(f"Registering service: {service_name} with id: {service_id}")
+        if service_config is None:
+            service_config = {"visibility": "public"}
+        await server.register_service(
+            {
+                "name": service_name,
+                "id": service_id,
+                "config": service_config,
+                "get_config": get_triton_config,
+                "execute": execute_triton,
+            }
+        )
+
+        await self.engine.wait_async()
 
     async def launch_hello_world(self):
         """Detect in which environment, docker/k8s/apptainer"""
@@ -276,7 +396,7 @@ def create_service(config):
         "download_models_from_s3": launcher.download_models_from_s3,
         "download_conda_envs_from_s3": launcher.download_conda_envs_from_s3,
         "launch_s3_server": launcher.launch_s3_server,
-        "launch_triton": launcher.launch_triton,
+        "launch_triton_server": launcher.launch_triton_server,
         "launch_command": launcher.launch_command,
         "stop_job": launcher.stop_job,
         "get_jobs_ids": launcher.get_jobs_ids,

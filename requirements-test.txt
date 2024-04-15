@@ -4,3 +4,4 @@ pytest-cov==4.1.0
 pytest-asyncio==0.23.5
 flake8==7.0.0
 mypy==1.8.0
+types-requests

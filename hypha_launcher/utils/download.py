@@ -82,7 +82,7 @@ def download_content(url: str) -> str:
     return response.text
 
 
-def parse_s3_xml(content: str, key_pattern: str) -> list[str]:
+def parse_s3_xml(content: str, key_pattern: str) -> list[dict]:
     # Parse the XML content
     root = ET.fromstring(content)
 
@@ -96,13 +96,22 @@ def parse_s3_xml(content: str, key_pattern: str) -> list[str]:
     contents_elements = root.findall("ns:Contents", ns)
 
     # Extract the 'Key' element text if it matches the pattern
-    matching_keys = [
-        elem.find("ns:Key", ns).text
-        for elem in contents_elements
-        if pattern.match(elem.find("ns:Key", ns).text)
-    ]
-
-    return matching_keys
+    items = []
+    for elem in contents_elements:
+        key = elem.find("ns:Key", ns)
+        if key is None:
+            continue
+        key_text = key.text
+        if key_text and pattern.match(key_text):
+            size_field = elem.find("ns:Size", ns)
+            if (size_field is None) or (size_field.text is None):
+                continue
+            size = int(size_field.text)
+            items.append({
+                "key": key_text,
+                "size": size,
+            })
+    return items
 
 
 if __name__ == "__main__":

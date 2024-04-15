@@ -46,7 +46,7 @@ class ContainerEngine:
     @staticmethod
     def process_image_name_for_docker(image_name: str):
         if image_name.startswith("docker://"):
-            return image_name[len("docker://") :]
+            return image_name[len("docker://"):]
         return image_name
 
     @staticmethod
@@ -79,6 +79,7 @@ class ContainerEngine:
         image_name: str,
         volumes: T.Optional[dict] = None,
         ports: T.Optional[dict] = None,
+        envs: T.Optional[dict] = None,
     ) -> str:
         """Get the command for run process in the container
 
@@ -89,22 +90,30 @@ class ContainerEngine:
                 The key is the host path and the value is the container path
             ports (dict, optional): port mapping
                 The key is the host port and the value is the container port
+            envs (dict, optional): environment variables
+                The key is the environment variable name and the value is the value
         """
         # Initialize volume and port mappings as empty strings
         volume_mapping = ""
         port_mapping = ""
+        env_options = ""
+        if volumes is None:
+            volumes = {}
         # If volumes are provided, construct volume mapping options
-        if volumes:
-            for host_path, container_path in volumes.items():
-                volume_mapping += f"-v {host_path}:{container_path} "
+        for host_path, container_path in volumes.items():
+            volume_mapping += f"-v {host_path}:{container_path} "
         # If ports are provided, construct port mapping options
         if ports:
             for host_port, container_port in ports.items():
                 port_mapping += f"-p {host_port}:{container_port} "
+        # If environment variables are provided, construct environment variable options
+        if envs:
+            for env_name, env_value in envs.items():
+                env_options += f"-e {env_name}={env_value} "
         # Construct the command based on the engine type
         if self.engine_type == "docker":
             image_name = self.process_image_name_for_docker(image_name)
-            return f"docker run --rm {volume_mapping} {port_mapping} {image_name} {cmd}"
+            return f"docker run --rm {env_options} {volume_mapping} {port_mapping} {image_name} {cmd}"
         elif self.engine_type == "apptainer":
             # add tmp dir mapping when using apptainer
             host_tmp_dir = self.store_dir / "apptainer_tmp"
@@ -117,10 +126,12 @@ class ContainerEngine:
             if volumes:
                 binds = [f"{host}:{container}" for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
-            return f"apptainer run --contain {bind_option} {sif_path} {cmd}"
+            if envs:
+                env_options = " ".join([f"--env {k}={v}" for k, v in envs.items()])
+            return f"apptainer run --contain {env_options} {bind_option} {sif_path} {cmd}"
         elif self.engine_type == "podman":
             image_name = self.process_image_name_for_docker(image_name)
-            return f"podman run {volume_mapping} {port_mapping} {image_name} {cmd}"
+            return f"podman run {env_options} {volume_mapping} {port_mapping} {image_name} {cmd}"
         else:
             raise NotImplementedError
 
