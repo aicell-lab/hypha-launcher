@@ -380,6 +380,7 @@ class HyphaLauncher:
         )
 
         await self.engine.wait_async()
+        print(f"Bioengine worker is ready, you can try the BioEngine worker with the web client: https://bioimage-io.github.io/bioengine-web-client/?server-url={hypha_server_url}&triton-service-id={triton_service_id}")
 
     async def launch_hello_world(self):
         """Detect in which environment, docker/k8s/apptainer"""
