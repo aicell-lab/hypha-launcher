@@ -78,6 +78,7 @@ cmd = container_engine.get_command(
     triton_cmd, "{TRITON_IMAGE}",
     volumes=volumes,
     envs=envs,
+    gpu=True,
 )
 print(cmd)
 os.system(cmd)
