@@ -79,6 +79,7 @@ class ContainerEngine:
         image_name: str,
         volumes: T.Optional[dict] = None,
         ports: T.Optional[dict] = None,
+        gpu: T.Optional[bool] = False,
         envs: T.Optional[dict] = None,
     ) -> str:
         """Get the command for run process in the container
@@ -90,6 +91,7 @@ class ContainerEngine:
                 The key is the host path and the value is the container path
             ports (dict, optional): port mapping
                 The key is the host port and the value is the container port
+            gpu (bool, optional): whether to use GPU
             envs (dict, optional): environment variables
                 The key is the environment variable name and the value is the value
         """
@@ -113,7 +115,8 @@ class ContainerEngine:
         # Construct the command based on the engine type
         if self.engine_type == "docker":
             image_name = self.process_image_name_for_docker(image_name)
-            return f"docker run --rm {env_options} {volume_mapping} {port_mapping} {image_name} {cmd}"
+            gpu_option = "--gpus all" if gpu else ""
+            return f"docker run --rm {gpu_option} {env_options} {volume_mapping} {port_mapping} {image_name} {cmd}"
         elif self.engine_type == "apptainer":
             # add tmp dir mapping when using apptainer
             host_tmp_dir = self.store_dir / "apptainer_tmp"
@@ -126,9 +129,10 @@ class ContainerEngine:
             if volumes:
                 binds = [f"{host}:{container}" for host, container in volumes.items()]
                 bind_option = f"--bind {','.join(binds)} "
+            gpu_option = "--nv" if gpu else ""
             if envs:
                 env_options = " ".join([f"--env {k}={v}" for k, v in envs.items()])
-            return f"apptainer run --contain {env_options} {bind_option} {sif_path} {cmd}"
+            return f"apptainer run --contain {gpu_option} {env_options} {bind_option} {sif_path} {cmd}"
         elif self.engine_type == "podman":
             image_name = self.process_image_name_for_docker(image_name)
             return f"podman run {env_options} {volume_mapping} {port_mapping} {image_name} {cmd}"
