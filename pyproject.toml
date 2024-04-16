@@ -16,7 +16,7 @@ dependencies = [
     "tqdm",
     "fire",
     "loguru",
-    "executor-engine",
+    "executor-engine>=0.2.5",
     "hypha",
     "uvicorn",
     "imjoy-rpc",
