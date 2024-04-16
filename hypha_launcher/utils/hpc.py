@@ -21,12 +21,17 @@ def detect_hpc_type() -> str:
 
 
 class HPCManger:
-    def __init__(self, hpc_type: T.Optional[str] = None):
+    def __init__(self, hpc_type: T.Optional[str] = None, hpc_job_command: T.Optional[str] = None):
         if hpc_type is None:
             hpc_type = detect_hpc_type()
         self.hpc_type = hpc_type
+        self.hpc_job_command = hpc_job_command or os.environ.get("HYPHA_HPC_JOB_COMMAND")
 
     def get_command(self, cmd: str, **attrs) -> str:
+        if self.hpc_job_command is not None:
+            if "{cmd}" in self.hpc_job_command:
+                return self.hpc_job_command.format(cmd=cmd)
+            return f"{self.hpc_job_command} {cmd}"
         if self.hpc_type == "slurm":
             return self.get_slurm_command(cmd, **attrs)
         elif self.hpc_type == "local":
@@ -37,28 +42,11 @@ class HPCManger:
     def get_slurm_command(
             self,
             cmd: str,
-            account: T.Optional[str] = None,
-            time: T.Optional[str] = None,
-            gpus_per_node: T.Optional[str] = None,
-            additonal_options: T.Optional[str] = None,
+            **attrs,
             ) -> str:
-        if account is None:
-            account = os.environ.get("SLURM_ACCOUNT")
-            if account is None:
-                raise ValueError("SLURM_ACCOUNT is not set.")
-        if time is None:
-            time = os.environ.get("SLURM_TIME")
-        if gpus_per_node is None:
-            gpus_per_node = os.environ.get("SLURM_GPUS_PER_NODE")
-        if additonal_options is None:
-            additonal_options = os.environ.get("SLURM_ADDITIONAL_OPTIONS")
-
-        options_str = f"--account={account} "
-        if time is not None:
-            options_str += f"--time={time} "
-        if gpus_per_node is not None:
-            options_str += f"--gpus-per-node={gpus_per_node} "
-        if additonal_options is not None:
-            options_str += additonal_options
+        options_str = ""
+        for key, value in attrs.items():
+            if value is not None:
+                options_str += f"--{key}={value} "
         new_cmd = f"srun {options_str} {cmd}"
         return new_cmd

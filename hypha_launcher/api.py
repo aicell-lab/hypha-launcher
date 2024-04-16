@@ -317,7 +317,7 @@ class HyphaLauncher:
         self._task_uuid_to_job[task_uuid] = job
         return job_dict
 
-    async def launch_bioimageio_backend(
+    async def launch_bioengine_backend(
             self,
             models_dir: T.Optional[str] = None,
             hypha_server_url: str = "https://ai.imjoy.io/",

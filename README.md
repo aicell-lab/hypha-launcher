@@ -41,23 +41,27 @@ pip install hypha-launcher
 $ hypha-launcher --help
 ```
 
-### Launch the bioimage.io backend
+### Launch the BioEngine
+
+BioEngine consists of a set of services that are used to serve AI models from bioimage.io. We provide the model test run feature accessible from https://bioimage.io and a dedicated bioengine web client: https://bioimage-io.github.io/bioengine-web-client/. While our public instance is openly accessible for testing and evaluation, you can run your own instance of the BioEngine to serve the models, e.g. with your own HPC computing resources.
 
 Download all models from s3 and launch triton server.
 
 ```bash
-$ python -m hypha_launcher launch_bioimageio_backend --service-id my-triton
+python -m hypha_launcher launch_bioengine_backend --service-id my-triton
 ```
 
-Launch on slurm cluster.
+Launch on HPC cluster. You need to set the job command template via the `HYPHA_HPC_JOB_COMMAND` environment variable for your own HPC cluster.
+
+For example, here is an example for launching the BioEngine on a Slurm cluster:
 
 ```bash
-# Please replace the slurm settings with your own settings
-$ export SLURM_ACCOUNT=Your-Slurm-Account
-$ export SLURM_TIME=03:00:00
-$ export SLURM_GPUS_PER_NODE=A100:1
-$ python -m hypha_launcher launch_bioimageio_backend --service-id my-triton
+# Please replace the job command with your own settings
+export HYPHA_HPC_JOB_COMMAND="slurm -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
+python -m hypha_launcher launch_bioengine_backend --service-id my-triton
 ```
+
+In the above example, the job command template is set to use the Slurm scheduler with the specified account and time limit. The `{cmd}` placeholder will be replaced with the actual command to launch jobs.
 
 ### Download model from s3
 
