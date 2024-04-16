@@ -35,7 +35,9 @@ class HyphaLauncher:
             hpc_manager_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             executor_engine_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             ):
-        store_dir = store_dir or os.environ.get("HYPHA_LAUNCHER_STORE_DIR", ".hypha_launcher")
+        store_dir = store_dir or os.environ.get("HYPHA_LAUNCHER_STORE_DIR")
+        if store_dir is None:
+            store_dir = ".hypha_launcher"
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
