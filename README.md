@@ -54,7 +54,7 @@ For example, here is an example for launching the BioEngine on a Slurm cluster:
 ```bash
 # Please replace the job command with your own settings
 export HYPHA_HPC_JOB_TEMPLATE="srun -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
-python -m hypha_launcher launch_bioengine_worker --service-id my-triton
+python -m hypha_launcher launch_bioengine_worker --hypha-server-url https://ai.imjoy.io --triton-service-id my-triton
 ```
 
 In the above example, the job command template is set to use the Slurm scheduler with the specified account and time limit. The `{cmd}` placeholder will be replaced with the actual command to launch jobs.

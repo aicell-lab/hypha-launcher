@@ -321,9 +321,9 @@ class HyphaLauncher:
             self,
             models_dir: T.Optional[str] = None,
             hypha_server_url: str = "https://ai.imjoy.io/",
-            service_name: str = "triton",
-            service_id: T.Optional[str] = None,
-            service_config: T.Optional[dict] = None,
+            triton_service_name: str = "triton",
+            triton_service_id: T.Optional[str] = None,
+            triton_service_config: T.Optional[dict] = None,
             ):
         if models_dir is None:
             models_dir = (self.store_dir / "models").as_posix()
@@ -363,16 +363,17 @@ class HyphaLauncher:
                 return {"error": str(e)}
 
         server = await self._get_hypha_server(hypha_server_url)
-        if service_id is None:
-            service_id = f"{service_name}-{secrets.token_urlsafe(8)}"
-        logger.info(f"Registering service: {service_name} with id: {service_id}")
-        if service_config is None:
-            service_config = {"visibility": "public"}
+        if triton_service_id is None:
+            triton_service_id = f"{triton_service_name}-{secrets.token_urlsafe(8)}"
+        logger.info(f"Registering service: {triton_service_name} with id: {triton_service_id}")
+        if triton_service_config is None:
+            triton_service_config = {"visibility": "public"}
         await server.register_service(
             {
-                "name": service_name,
-                "id": service_id,
-                "config": service_config,
+                "name": triton_service_name,
+                "id": triton_service_id,
+                "type": "triton-client",
+                "config": triton_service_config,
                 "get_config": get_triton_config,
                 "execute": execute_triton,
             }
