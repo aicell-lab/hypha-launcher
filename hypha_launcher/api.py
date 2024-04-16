@@ -29,7 +29,7 @@ logger = get_logger()
 class HyphaLauncher:
     def __init__(
             self,
-            store_dir: str = None,
+            store_dir: T.Optional[str] = None,
             debug: bool = False,
             container_engine_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             hpc_manager_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
