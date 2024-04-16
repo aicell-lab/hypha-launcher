@@ -29,13 +29,15 @@ logger = get_logger()
 class HyphaLauncher:
     def __init__(
             self,
-            store_dir: str = ".hypha_launcher",
+            store_dir: T.Optional[str] = None,
             debug: bool = False,
             container_engine_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             hpc_manager_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             executor_engine_kwargs: T.Optional[T.Dict[str, T.Any]] = None,
             ):
-        store_dir = os.environ.get("HYPHA_LAUNCHER_STORE_DIR", store_dir)
+        store_dir = store_dir or os.environ.get("HYPHA_LAUNCHER_STORE_DIR")
+        if store_dir is None:
+            store_dir = ".hypha_launcher"
         self.store_dir = Path(store_dir).expanduser().absolute()
         if not self.store_dir.exists():
             self.store_dir.mkdir(parents=True)
@@ -317,13 +319,13 @@ class HyphaLauncher:
         self._task_uuid_to_job[task_uuid] = job
         return job_dict
 
-    async def launch_bioimageio_backend(
+    async def launch_bioengine_worker(
             self,
             models_dir: T.Optional[str] = None,
             hypha_server_url: str = "https://ai.imjoy.io/",
-            service_name: str = "triton",
-            service_id: T.Optional[str] = None,
-            service_config: T.Optional[dict] = None,
+            triton_service_name: str = "triton",
+            triton_service_id: T.Optional[str] = None,
+            triton_service_config: T.Optional[dict] = None,
             ):
         if models_dir is None:
             models_dir = (self.store_dir / "models").as_posix()
@@ -363,22 +365,24 @@ class HyphaLauncher:
                 return {"error": str(e)}
 
         server = await self._get_hypha_server(hypha_server_url)
-        if service_id is None:
-            service_id = f"{service_name}-{secrets.token_urlsafe(8)}"
-        logger.info(f"Registering service: {service_name} with id: {service_id}")
-        if service_config is None:
-            service_config = {"visibility": "public"}
+        if triton_service_id is None:
+            triton_service_id = f"{triton_service_name}-{secrets.token_urlsafe(8)}"
+        logger.info(f"Registering service: {triton_service_name} with id: {triton_service_id}")
+        if triton_service_config is None:
+            triton_service_config = {"visibility": "public"}
         await server.register_service(
             {
-                "name": service_name,
-                "id": service_id,
-                "config": service_config,
+                "name": triton_service_name,
+                "id": triton_service_id,
+                "type": "triton-client",
+                "config": triton_service_config,
                 "get_config": get_triton_config,
                 "execute": execute_triton,
             }
         )
 
         await self.engine.wait_async()
+        print(f"Bioengine worker is ready, you can try the BioEngine worker with the web client: https://bioimage-io.github.io/bioengine-web-client/?server-url={hypha_server_url}&triton-service-id={triton_service_id}")
 
     async def launch_hello_world(self):
         """Detect in which environment, docker/k8s/apptainer"""
