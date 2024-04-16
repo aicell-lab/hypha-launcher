@@ -47,13 +47,13 @@ BioEngine consists of a set of services that are used to serve AI models from bi
 
 Download all models from s3 and launch triton server.
 
-Launch on HPC cluster. You need to set the job command template via the `HYPHA_HPC_JOB_COMMAND` environment variable for your own HPC cluster.
+Launch on HPC cluster. You need to set the job command template via the `HYPHA_HPC_JOB_TEMPLATE` environment variable for your own HPC cluster.
 
 For example, here is an example for launching the BioEngine on a Slurm cluster:
 
 ```bash
 # Please replace the job command with your own settings
-export HYPHA_HPC_JOB_COMMAND="slurm -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
+export HYPHA_HPC_JOB_TEMPLATE="slurm -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
 python -m hypha_launcher launch_bioengine_backend --service-id my-triton
 ```
 

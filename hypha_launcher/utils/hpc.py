@@ -21,17 +21,17 @@ def detect_hpc_type() -> str:
 
 
 class HPCManger:
-    def __init__(self, hpc_type: T.Optional[str] = None, hpc_job_command: T.Optional[str] = None):
+    def __init__(self, hpc_type: T.Optional[str] = None, hpc_job_template: T.Optional[str] = None):
         if hpc_type is None:
             hpc_type = detect_hpc_type()
         self.hpc_type = hpc_type
-        self.hpc_job_command = hpc_job_command or os.environ.get("HYPHA_HPC_JOB_COMMAND")
+        self.hpc_job_template = hpc_job_template or os.environ.get("HYPHA_HPC_JOB_TEMPLATE")
 
     def get_command(self, cmd: str, **attrs) -> str:
-        if self.hpc_job_command is not None:
-            if "{cmd}" in self.hpc_job_command:
-                return self.hpc_job_command.format(cmd=cmd)
-            return f"{self.hpc_job_command} {cmd}"
+        if self.hpc_job_template is not None:
+            if "{cmd}" in self.hpc_job_template:
+                return self.hpc_job_template.format(cmd=cmd)
+            return f"{self.hpc_job_template} {cmd}"
         if self.hpc_type == "slurm":
             return self.get_slurm_command(cmd, **attrs)
         elif self.hpc_type == "local":
