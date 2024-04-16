@@ -47,10 +47,6 @@ BioEngine consists of a set of services that are used to serve AI models from bi
 
 Download all models from s3 and launch triton server.
 
-```bash
-python -m hypha_launcher launch_bioengine_backend --service-id my-triton
-```
-
 Launch on HPC cluster. You need to set the job command template via the `HYPHA_HPC_JOB_COMMAND` environment variable for your own HPC cluster.
 
 For example, here is an example for launching the BioEngine on a Slurm cluster:
@@ -62,6 +58,12 @@ python -m hypha_launcher launch_bioengine_backend --service-id my-triton
 ```
 
 In the above example, the job command template is set to use the Slurm scheduler with the specified account and time limit. The `{cmd}` placeholder will be replaced with the actual command to launch jobs.
+
+Optionally, you can also set the store path for storing the models and the triton server configuration via the `HYPHA_LAUNCHER_STORE_DIR` environment variable. By default, the store path is set to `.hypha-launcher`.
+
+```bash
+export HYPHA_LAUNCHER_STORE_DIR=".hypha-launcher"
+```
 
 ### Download model from s3
 
