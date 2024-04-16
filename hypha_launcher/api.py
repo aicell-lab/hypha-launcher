@@ -293,13 +293,16 @@ class HyphaLauncher:
             f.write(launch_script)
         run_cmd = f"python {script_path.as_posix()}"
         cmd = self.hpc_manager.get_command(run_cmd, **kwargs)
-        job = SubprocessJob(cmd, base_class=ProcessJob)
+        job = SubprocessJob(cmd, base_class=ProcessJob, redirect_out_err=True)
         job_dict = {
             "job_id": job.id,
             "stop": job.cancel,
         }
         await self.engine.submit_async(job)
         await job.wait_until(lambda j: j.status in ("running", "failed"))
+        if job.status == "running":
+            logger.info("Job will write stdout to: " + (job.cache_dir / "stdout.txt").absolute().as_posix())
+            logger.info("Job will write stderr to: " + (job.cache_dir / "stderr.txt").absolute().as_posix())
         address_found = False
         while not address_found:  # wait for the address to be recorded
             if self._ip_record_flie.exists():
