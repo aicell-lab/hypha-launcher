@@ -53,7 +53,7 @@ For example, here is an example for launching the BioEngine on a Slurm cluster:
 
 ```bash
 # Please replace the job command with your own settings
-export HYPHA_HPC_JOB_TEMPLATE="slurm -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
+export HYPHA_HPC_JOB_TEMPLATE="srun -A Your-Slurm-Account -t 03:00:00 --gpus-per-node A100:1 {cmd}"
 python -m hypha_launcher launch_bioengine_backend --service-id my-triton
 ```
 
