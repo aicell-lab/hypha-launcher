@@ -1,3 +1,4 @@
+import os
 import typing as T
 from pathlib import Path
 
@@ -77,6 +78,7 @@ class ContainerEngine:
         self,
         cmd: str,
         image_name: str,
+        cmd_template: T.Optional[str] = None,
         volumes: T.Optional[dict] = None,
         ports: T.Optional[dict] = None,
         gpu: T.Optional[bool] = False,
@@ -87,6 +89,9 @@ class ContainerEngine:
         Args:
             cmd (str): command to run in the container
             image_name (str): image name
+            cmd_template (str, optional): command template,
+                used to construct the command.
+                If not provided, construct the command based on the engine type.
             volumes (dict, optional): volume mapping
                 The key is the host path and the value is the container path
             ports (dict, optional): port mapping
@@ -95,6 +100,9 @@ class ContainerEngine:
             envs (dict, optional): environment variables
                 The key is the environment variable name and the value is the value
         """
+        cmd_template = cmd_template or os.environ.get("HYPHA_CONTAINER_CMD_TEMPLATE")
+        if cmd_template is not None:
+            return cmd_template.format(cmd=cmd, image_name=image_name)
         # Initialize volume and port mappings as empty strings
         volume_mapping = ""
         port_mapping = ""
